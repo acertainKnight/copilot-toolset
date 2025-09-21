@@ -1,0 +1,108 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "type": "shell",
+      "command": "npx",
+      "args": ["@modelcontextprotocol/inspector", "${workspaceFolder}/path/to/your/server.js"],
+      "group": "test",
+      "label": "MCP Inspector",
+      "detail": "Run MCP Inspector for debugging any MCP server",
+      "problemMatcher": []
+    },
+    {
+      "type": "shell",
+      "command": "node",
+      "args": ["${workspaceFolder}/path/to/your/server.js"],
+      "group": "test",
+      "label": "Start MCP Server",
+      "detail": "Start your MCP server in production mode",
+      "options": {
+        "env": {
+          "NODE_ENV": "production",
+          "LOG_LEVEL": "info"
+        }
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "new",
+        "showReuseMessage": false
+      },
+      "problemMatcher": []
+    },
+    {
+      "type": "shell",
+      "command": "node",
+      "args": ["${workspaceFolder}/path/to/your/server.js"],
+      "group": "test",
+      "label": "Start MCP Server (Debug)",
+      "detail": "Start your MCP server in development mode with debug logging",
+      "options": {
+        "env": {
+          "NODE_ENV": "development",
+          "LOG_LEVEL": "debug"
+        }
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "new",
+        "showReuseMessage": false
+      },
+      "problemMatcher": []
+    },
+    {
+      "type": "shell",
+      "command": "echo",
+      "args": ["{\"jsonrpc\":\"2.0\",\"method\":\"tools/list\",\"id\":1}"],
+      "group": "test",
+      "label": "Test MCP Tools",
+      "detail": "Test MCP server tools via JSON-RPC",
+      "linux": {
+        "options": {
+          "shell": {
+            "executable": "/bin/bash",
+            "args": ["-c", "echo '{\"jsonrpc\":\"2.0\",\"method\":\"tools/list\",\"id\":1}' | node '${workspaceFolder}/path/to/your/server.js'"]
+          }
+        }
+      },
+      "windows": {
+        "options": {
+          "shell": {
+            "executable": "powershell.exe",
+            "args": ["-c", "echo '{\"jsonrpc\":\"2.0\",\"method\":\"tools/list\",\"id\":1}' | node '${workspaceFolder}/path/to/your/server.js'"]
+          }
+        }
+      },
+      "problemMatcher": []
+    },
+    {
+      "type": "shell",
+      "command": "echo",
+      "args": ["{\"jsonrpc\":\"2.0\",\"method\":\"resources/list\",\"id\":2}"],
+      "group": "test",
+      "label": "Test MCP Resources",
+      "detail": "Test MCP server resources via JSON-RPC",
+      "linux": {
+        "options": {
+          "shell": {
+            "executable": "/bin/bash",
+            "args": ["-c", "echo '{\"jsonrpc\":\"2.0\",\"method\":\"resources/list\",\"id\":2}' | node '${workspaceFolder}/path/to/your/server.js'"]
+          }
+        }
+      },
+      "windows": {
+        "options": {
+          "shell": {
+            "executable": "powershell.exe",
+            "args": ["-c", "echo '{\"jsonrpc\":\"2.0\",\"method\":\"resources/list\",\"id\":2}' | node '${workspaceFolder}/path/to/your/server.js'"]
+          }
+        }
+      },
+      "problemMatcher": []
+    }
+  ]
+}

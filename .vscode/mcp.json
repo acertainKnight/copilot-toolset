@@ -1,0 +1,13 @@
+{
+  "mcpVersion": "2024-11-05",
+  "servers": {
+    "copilot-toolset": {
+      "command": "copilot-mcp-server",
+      "args": ["--workspace=${workspaceFolder}"],
+      "env": {
+        "COPILOT_MCP_WORKSPACE": "${workspaceFolder}",
+        "COPILOT_MCP_PROJECT_TYPE": "auto-detect"
+      }
+    }
+  }
+}

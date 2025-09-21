@@ -1,0 +1,58 @@
+{
+  "servers": {
+    "copilotMcpToolset": {
+      "type": "stdio",
+      "command": "copilot-mcp-server",
+      "args": ["--workspace=${workspaceFolder}"],
+      "env": {
+        "COPILOT_MCP_WORKSPACE": "${workspaceFolder}"
+      }
+    }
+  },
+  "_documentation": {
+    "_description": "Configuration variants for different environments",
+    "_development": {
+      "description": "Development with debug logging",
+      "example": {
+        "servers": {
+          "copilotMcpToolset": {
+            "type": "stdio",
+            "command": "copilot-mcp-server",
+            "args": ["--workspace=${workspaceFolder}"],
+            "env": {
+              "COPILOT_MCP_WORKSPACE": "${workspaceFolder}",
+              "NODE_ENV": "development",
+              "LOG_LEVEL": "debug"
+            }
+          }
+        }
+      }
+    },
+    "_production": {
+      "description": "Production optimized configuration",
+      "example": {
+        "servers": {
+          "copilotMcpToolset": {
+            "type": "stdio",
+            "command": "copilot-mcp-server",
+            "args": ["--workspace=${workspaceFolder}"],
+            "env": {
+              "COPILOT_MCP_WORKSPACE": "${workspaceFolder}",
+              "NODE_ENV": "production"
+            }
+          }
+        }
+      }
+    },
+    "_availableTools": [
+      "init_project",
+      "store_memory",
+      "search_memory",
+      "get_memory_stats",
+      "create_mode",
+      "heal_chat_mode",
+      "heal_project_context",
+      "optimize_memory"
+    ]
+  }
+}

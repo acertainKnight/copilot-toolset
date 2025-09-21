@@ -1,0 +1,83 @@
+{
+  "name": "copilot-mcp-toolset",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "A standalone MCP server for GitHub Copilot with automatic project initialization, custom chat modes, and persistent multilevel memory",
+  "main": "dist/server/index.js",
+  "bin": {
+    "copilot-mcp-server": "./dist/server/index.js"
+  },
+  "scripts": {
+    "build": "tsc && shx chmod +x dist/server/index.js && echo '{\"type\": \"module\"}' > dist/package.json",
+    "dev": "tsc --watch",
+    "start": "node dist/server/index.js",
+    "test": "npm run test:unit",
+    "test:unit": "jest --config jest.unit.config.js",
+    "test:unit:watch": "jest --config jest.unit.config.js --watch",
+    "test:integration": "jest --config jest.integration.config.js",
+    "test:e2e": "jest --config jest.e2e.config.js",
+    "test:performance": "jest --config jest.performance.config.js",
+    "test:all": "npm run test:unit && npm run test:integration && npm run test:e2e",
+    "test:coverage": "npm run test:unit -- --coverage && npm run test:integration -- --coverage",
+    "test:ci": "npm run test:all && npm run test:performance",
+    "test:full": "node scripts/run-all-tests.js",
+    "test:mcp": "echo '{\"jsonrpc\":\"2.0\",\"method\":\"tools/list\",\"id\":1}' | node dist/server/index.js",
+    "test:mcp:tools": "echo '{\"jsonrpc\":\"2.0\",\"method\":\"tools/call\",\"params\":{\"name\":\"get_memory_stats\",\"arguments\":{}},\"id\":1}' | node dist/server/index.js",
+    "validate:config": "node validate-config.js",
+    "clean": "rimraf dist coverage .nyc_output test-reports performance-reports",
+    "clean:test": "rimraf coverage tests/fixtures/temp test-reports performance-reports",
+    "prepare": "npm run build",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "pretest": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "github-copilot",
+    "ai",
+    "typescript",
+    "vscode",
+    "memory-system",
+    "project-initialization"
+  ],
+  "author": "Copilot MCP Toolset",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.18.1",
+    "better-sqlite3": "^9.6.0",
+    "level": "^8.0.1",
+    "glob": "^10.3.10",
+    "zod": "^3.23.8",
+    "simple-git": "^3.20.0",
+    "yaml": "^2.3.4",
+    "markdown-it": "^14.0.0",
+    "commander": "^11.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.19",
+    "@types/better-sqlite3": "^7.6.9",
+    "@types/glob": "^8.1.0",
+    "@types/markdown-it": "^13.0.7",
+    "@types/jest": "^29.5.12",
+    "@typescript-eslint/eslint-plugin": "^7.0.1",
+    "@typescript-eslint/parser": "^7.0.1",
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
+    "typescript": "^5.3.3",
+    "rimraf": "^5.0.5",
+    "shx": "^0.3.4"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/copilot-mcp/toolset"
+  },
+  "bugs": {
+    "url": "https://github.com/copilot-mcp/toolset/issues"
+  },
+  "homepage": "https://github.com/copilot-mcp/toolset#readme"
+}
