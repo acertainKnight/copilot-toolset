@@ -52,7 +52,7 @@
     "simple-git": "^3.20.0",
     "yaml": "^2.3.4",
     "markdown-it": "^14.0.0",
-    "commander": "^11.1.0"
+    "commander": "^14.0.1"
   },
   "devDependencies": {
     "@types/node": "^20.11.19",
