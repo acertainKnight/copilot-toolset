@@ -1,0 +1,8 @@
+{
+  "servers": {
+    "copilotMcpToolset": {
+      "type": "stdio",
+      "command": "copilot-mcp-server"
+    }
+  }
+}

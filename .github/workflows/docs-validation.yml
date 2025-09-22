@@ -1,0 +1,399 @@
+name: Documentation Validation
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - '**.md'
+      - 'docs/**'
+      - 'examples/**'
+      - '.github/workflows/docs-validation.yml'
+      - 'scripts/docs/**'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - '**.md'
+      - 'docs/**'
+      - 'examples/**'
+      - '.github/workflows/docs-validation.yml'
+      - 'scripts/docs/**'
+  schedule:
+    # Run weekly to catch external link changes
+    - cron: '0 2 * * 1'
+  workflow_dispatch:
+    inputs:
+      skip_external_links:
+        description: 'Skip external link checking'
+        required: false
+        default: 'false'
+        type: boolean
+      full_validation:
+        description: 'Run full validation suite including performance tests'
+        required: false
+        default: 'false'
+        type: boolean
+
+env:
+  NODE_VERSION: '18'
+
+jobs:
+  # Quick validation for fast feedback
+  quick-validation:
+    name: Quick Documentation Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      - name: Run basic documentation validation
+        run: |
+          echo "🔍 Running quick documentation validation..."
+          node scripts/docs/validate-docs.js
+        continue-on-error: false
+
+      - name: Check progressive disclosure compliance
+        run: |
+          echo "🏗️ Checking progressive disclosure structure..."
+          node scripts/docs/check-structure.js
+        continue-on-error: false
+
+  # Comprehensive validation
+  comprehensive-validation:
+    name: Comprehensive Documentation Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: quick-validation
+    if: github.event_name != 'schedule' || github.event.inputs.full_validation == 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      - name: Test code examples
+        run: |
+          echo "🧪 Testing all code examples..."
+          node scripts/docs/test-examples.js
+        continue-on-error: false
+
+      - name: Validate internal links
+        run: |
+          echo "🔗 Checking internal links..."
+          node scripts/docs/check-links.js --no-external
+        continue-on-error: false
+
+      - name: Upload validation artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-failures
+          path: |
+            scripts/docs/temp-test-files/
+          retention-days: 7
+
+  # External link validation (separate job for reliability)
+  external-link-validation:
+    name: External Link Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: quick-validation
+    if: |
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.skip_external_links != 'true') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate external links
+        run: |
+          echo "🌐 Checking external links..."
+          node scripts/docs/check-links.js
+        continue-on-error: true # External links can be flaky
+
+      - name: Create external link report
+        if: always()
+        run: |
+          echo "📊 External link validation completed"
+          echo "Check job output for broken links"
+
+  # Markdown linting
+  markdown-lint:
+    name: Markdown Linting
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install markdownlint-cli
+        run: npm install -g markdownlint-cli
+
+      - name: Create markdownlint config
+        run: |
+          cat > .markdownlint.json << EOF
+          {
+            "default": true,
+            "MD013": {
+              "line_length": 120,
+              "code_blocks": false,
+              "tables": false
+            },
+            "MD033": {
+              "allowed_elements": ["details", "summary", "br", "sub", "sup"]
+            },
+            "MD041": false
+          }
+          EOF
+
+      - name: Run markdownlint
+        run: |
+          markdownlint \
+            "*.md" \
+            "docs/**/*.md" \
+            "examples/**/*.md" \
+            ".github/**/*.md" \
+            --ignore node_modules \
+            --ignore .copilot
+
+  # Progressive disclosure compliance (detailed)
+  progressive-disclosure-audit:
+    name: Progressive Disclosure Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'pull_request' || github.event.inputs.full_validation == 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run progressive disclosure audit
+        run: |
+          echo "🔍 Auditing progressive disclosure compliance..."
+          echo "Checking hive mind optimization standards..."
+          node scripts/docs/check-structure.js
+
+      - name: Check file length changes
+        if: github.event_name == 'pull_request'
+        run: |
+          echo "📏 Checking for file length regressions..."
+
+          # Get list of changed markdown files
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD -- '*.md' 'docs/**/*.md' 'examples/**/*.md')
+
+          if [ -n "$CHANGED_FILES" ]; then
+            echo "Changed files:"
+            echo "$CHANGED_FILES"
+
+            # Run validation on changed files only
+            for file in $CHANGED_FILES; do
+              if [ -f "$file" ]; then
+                lines=$(grep -c . "$file" || echo "0")
+                echo "$file: $lines lines"
+
+                # Alert if README.md exceeds hive mind limit
+                if [ "$file" = "README.md" ] && [ "$lines" -gt 100 ]; then
+                  echo "⚠️ WARNING: README.md has $lines lines, should be ≤100 for progressive disclosure"
+                  echo "::warning file=$file,line=1::README.md exceeds progressive disclosure limit ($lines > 100 lines)"
+                fi
+              fi
+            done
+          else
+            echo "No markdown files changed"
+          fi
+
+  # Documentation freshness check
+  documentation-freshness:
+    name: Documentation Freshness Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event_name == 'schedule'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for outdated documentation
+        run: |
+          echo "📅 Checking documentation freshness..."
+
+          # Find files older than 6 months
+          OLD_FILES=$(find . -name "*.md" -type f -mtime +180 \
+            ! -path "./node_modules/*" \
+            ! -path "./.git/*" \
+            ! -path "./.copilot/*" \
+            ! -path "./coverage/*" \
+            ! -path "./dist/*")
+
+          if [ -n "$OLD_FILES" ]; then
+            echo "⚠️ The following documentation files haven't been updated in 6+ months:"
+            echo "$OLD_FILES"
+            echo "::warning::Consider reviewing these files for accuracy"
+          else
+            echo "✅ All documentation is recently updated"
+          fi
+
+  # Performance validation (for large documentation sets)
+  performance-validation:
+    name: Performance Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.event.inputs.full_validation == 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run performance validation
+        run: |
+          echo "🚀 Running documentation performance validation..."
+
+          # Count total documentation
+          TOTAL_MD_FILES=$(find . -name "*.md" \
+            ! -path "./node_modules/*" \
+            ! -path "./.git/*" \
+            ! -path "./.copilot/*" | wc -l)
+
+          TOTAL_LINES=$(find . -name "*.md" \
+            ! -path "./node_modules/*" \
+            ! -path "./.git/*" \
+            ! -path "./.copilot/*" \
+            -exec wc -l {} + | tail -1 | cut -d' ' -f1)
+
+          echo "📊 Documentation metrics:"
+          echo "  Total markdown files: $TOTAL_MD_FILES"
+          echo "  Total lines: $TOTAL_LINES"
+
+          # Performance benchmark
+          echo "⏱️ Running validation performance test..."
+          time node scripts/docs/validate-docs.js
+
+  # Validation summary
+  validation-summary:
+    name: Validation Summary
+    runs-on: ubuntu-latest
+    needs: [quick-validation, comprehensive-validation, markdown-lint, progressive-disclosure-audit]
+    if: always()
+
+    steps:
+      - name: Generate summary
+        run: |
+          echo "## 📋 Documentation Validation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Check job statuses
+          if [ "${{ needs.quick-validation.result }}" = "success" ]; then
+            echo "✅ **Quick Validation**: Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Quick Validation**: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ needs.comprehensive-validation.result }}" = "success" ]; then
+            echo "✅ **Comprehensive Validation**: Passed" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.comprehensive-validation.result }}" = "skipped" ]; then
+            echo "⏭️ **Comprehensive Validation**: Skipped" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Comprehensive Validation**: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ needs.markdown-lint.result }}" = "success" ]; then
+            echo "✅ **Markdown Linting**: Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Markdown Linting**: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ needs.progressive-disclosure-audit.result }}" = "success" ]; then
+            echo "✅ **Progressive Disclosure**: Compliant" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.progressive-disclosure-audit.result }}" = "skipped" ]; then
+            echo "⏭️ **Progressive Disclosure**: Skipped" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Progressive Disclosure**: Non-compliant" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🎯 Validation Goals" >> $GITHUB_STEP_SUMMARY
+          echo "- Maintain hive mind optimization standards" >> $GITHUB_STEP_SUMMARY
+          echo "- Ensure progressive disclosure compliance" >> $GITHUB_STEP_SUMMARY
+          echo "- Verify all code examples work" >> $GITHUB_STEP_SUMMARY
+          echo "- Keep documentation current and accurate" >> $GITHUB_STEP_SUMMARY
+
+      - name: Set overall status
+        run: |
+          # Determine overall success
+          if [ "${{ needs.quick-validation.result }}" = "success" ] &&
+             [ "${{ needs.markdown-lint.result }}" = "success" ] &&
+             ([ "${{ needs.comprehensive-validation.result }}" = "success" ] || [ "${{ needs.comprehensive-validation.result }}" = "skipped" ]) &&
+             ([ "${{ needs.progressive-disclosure-audit.result }}" = "success" ] || [ "${{ needs.progressive-disclosure-audit.result }}" = "skipped" ]); then
+            echo "🎉 Documentation validation passed!"
+            echo "✨ Hive mind optimization standards maintained."
+          else
+            echo "❌ Documentation validation failed"
+            echo "Please review the failed jobs above"
+            exit 1
+          fi

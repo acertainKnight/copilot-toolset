@@ -1,0 +1,146 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Documentation validation pre-commit hook
+# Ensures documentation quality before commits
+
+echo "🔍 Running documentation validation..."
+
+# Check if any markdown files are staged
+STAGED_MD_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(md)$' || true)
+
+if [ -z "$STAGED_MD_FILES" ]; then
+    echo "✅ No markdown files to validate"
+    exit 0
+fi
+
+echo "📄 Found staged markdown files:"
+echo "$STAGED_MD_FILES"
+
+# Ensure scripts are executable
+chmod +x scripts/docs/*.js
+
+# Quick validation of staged files only
+echo ""
+echo "🚀 Running quick validation..."
+
+# Create temporary validation for staged files only
+for file in $STAGED_MD_FILES; do
+    if [ -f "$file" ]; then
+        # Basic length check for progressive disclosure
+        line_count=$(wc -l < "$file" 2>/dev/null || echo "0")
+
+        # Check README.md specifically
+        if [ "$(basename "$file")" = "README.md" ] && [ "$line_count" -gt 100 ]; then
+            echo "❌ ERROR: $file exceeds progressive disclosure limit ($line_count > 100 lines)"
+            echo "   Please break content into smaller sections or move details to examples/"
+            exit 1
+        fi
+
+        # Check example files
+        if echo "$file" | grep -q "examples/" && [ "$line_count" -gt 150 ]; then
+            echo "⚠️  WARNING: $file is getting long ($line_count > 150 lines)"
+            echo "   Consider breaking into smaller focused examples"
+        fi
+    fi
+done
+
+# Run basic markdown linting on staged files
+if command -v markdownlint >/dev/null 2>&1; then
+    echo ""
+    echo "📝 Checking markdown formatting..."
+
+    # Create temporary markdownlint config
+    cat > .markdownlint.tmp.json << EOF
+{
+  "default": true,
+  "MD013": {
+    "line_length": 120,
+    "code_blocks": false,
+    "tables": false
+  },
+  "MD033": {
+    "allowed_elements": ["details", "summary", "br", "sub", "sup"]
+  },
+  "MD041": false
+}
+EOF
+
+    # Lint only staged files
+    echo "$STAGED_MD_FILES" | xargs markdownlint --config .markdownlint.tmp.json
+    LINT_EXIT_CODE=$?
+
+    # Cleanup
+    rm -f .markdownlint.tmp.json
+
+    if [ $LINT_EXIT_CODE -ne 0 ]; then
+        echo "❌ Markdown linting failed. Please fix formatting issues."
+        exit 1
+    fi
+else
+    echo "⚠️  markdownlint not found, skipping format check"
+fi
+
+# Run basic link validation for internal links
+echo ""
+echo "🔗 Checking internal links..."
+
+# Simple internal link check for staged files
+for file in $STAGED_MD_FILES; do
+    if [ -f "$file" ]; then
+        # Extract internal links (not starting with http)
+        INTERNAL_LINKS=$(grep -o '\[.*\](\..*\|[^h].*\.md\|[^h].*\.png\|[^h].*\.jpg\|[^h].*\.gif\|[^h].*\.svg)' "$file" 2>/dev/null || true)
+
+        if [ -n "$INTERNAL_LINKS" ]; then
+            echo "$INTERNAL_LINKS" | while IFS= read -r link; do
+                # Extract the path from [text](path)
+                link_path=$(echo "$link" | sed 's/.*(\(.*\))/\1/')
+
+                # Skip anchors and external links
+                if echo "$link_path" | grep -q "^#\|^http"; then
+                    continue
+                fi
+
+                # Resolve relative path
+                if [ ! -f "$link_path" ] && [ ! -f "$(dirname "$file")/$link_path" ]; then
+                    echo "❌ Broken link in $file: $link_path"
+                    exit 1
+                fi
+            done
+        fi
+    fi
+done
+
+# Basic code block validation
+echo ""
+echo "🧪 Validating code examples..."
+
+for file in $STAGED_MD_FILES; do
+    if [ -f "$file" ]; then
+        # Check for JSON code blocks and validate them
+        awk '
+        /```json/ { in_json=1; json_content=""; next }
+        in_json && /```/ {
+            # Validate JSON using node if available
+            if (system("command -v node >/dev/null 2>&1") == 0) {
+                print json_content | "node -e \"try { JSON.parse(require('fs').readFileSync(0, 'utf8')); } catch(e) { process.exit(1); }\""
+                close("node -e \"try { JSON.parse(require('fs').readFileSync(0, 'utf8')); } catch(e) { process.exit(1); }\"")
+            }
+            in_json=0; next
+        }
+        in_json { json_content = json_content $0 "\n" }
+        ' "$file"
+
+        if [ $? -ne 0 ]; then
+            echo "❌ Invalid JSON code block in $file"
+            exit 1
+        fi
+    fi
+done
+
+echo ""
+echo "✅ Documentation validation passed!"
+echo "📋 All staged markdown files meet quality standards"
+echo "🎯 Progressive disclosure principles maintained"
+
+exit 0

@@ -1,0 +1,40 @@
+{
+  "servers": {
+    "copilotMcpToolset": {
+      "type": "stdio",
+      "command": "copilot-mcp-server",
+      "args": ["--workspace=${workspaceFolder}"],
+      "env": {
+        "COPILOT_MCP_WORKSPACE": "${workspaceFolder}"
+      }
+    }
+  },
+  "_documentation": {
+    "_description": "GitHub Copilot optimized MCP server configuration",
+    "_usage": {
+      "copyTo": ".vscode/mcp.json",
+      "description": "Copy this configuration to your workspace .vscode/mcp.json file"
+    },
+    "_availableTools": [
+      "init_project - Initialize project with COPILOT.md files and memory bank",
+      "store_memory - Store information in the three-tier memory system",
+      "search_memory - Search across all memory tiers",
+      "get_memory_stats - Get memory system statistics",
+      "create_mode - Create a GitHub Copilot chat mode file",
+      "heal_chat_mode - Fix a chat mode that isn't working correctly",
+      "heal_project_context - Fix project context files",
+      "optimize_memory - Optimize memory system performance"
+    ],
+    "_testCommands": {
+      "listTools": "echo '{\"jsonrpc\":\"2.0\",\"method\":\"tools/list\",\"id\":1}' | copilot-mcp-server",
+      "testInit": "echo '{\"jsonrpc\":\"2.0\",\"method\":\"tools/call\",\"params\":{\"name\":\"init_project\",\"arguments\":{\"project_path\":\".\"}},\"id\":1}' | copilot-mcp-server",
+      "getStats": "echo '{\"jsonrpc\":\"2.0\",\"method\":\"tools/call\",\"params\":{\"name\":\"get_memory_stats\",\"arguments\":{}},\"id\":1}' | copilot-mcp-server"
+    },
+    "_requirements": [
+      "Node.js 18+ installed",
+      "copilot-mcp-server globally installed via: ./scripts/install-global.sh",
+      "VS Code with GitHub Copilot extension",
+      "Place this config in .vscode/mcp.json in your workspace"
+    ]
+  }
+}

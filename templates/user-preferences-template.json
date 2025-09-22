@@ -1,0 +1,185 @@
+{
+  "$schema": "./user-preferences-schema.json",
+  "version": "1.0.0",
+  "lastUpdated": "{{CURRENT_DATE}}",
+  "codingStyle": {
+    "primaryLanguage": "typescript",
+    "secondaryLanguages": ["javascript", "python", "java", "csharp"],
+    "formatting": {
+      "semicolons": true,
+      "quotes": "single",
+      "trailingCommas": true,
+      "tabSize": 2,
+      "insertSpaces": true,
+      "lineEndings": "crlf",
+      "maxLineLength": 100
+    },
+    "patterns": {
+      "preferFunctional": true,
+      "useTypeScript": true,
+      "preferArrowFunctions": true,
+      "preferConst": true,
+      "useStrictMode": true,
+      "preferModularCode": true
+    },
+    "namingConventions": {
+      "variables": "camelCase",
+      "functions": "camelCase",
+      "classes": "PascalCase",
+      "interfaces": "PascalCase",
+      "types": "PascalCase",
+      "constants": "SCREAMING_SNAKE_CASE",
+      "files": "kebab-case",
+      "directories": "kebab-case"
+    }
+  },
+  "frameworks": {
+    "preferred": {
+      "frontend": ["react", "vue"],
+      "backend": ["express", "fastify", "nestjs"],
+      "testing": ["jest", "vitest", "cypress"],
+      "build": ["vite", "webpack", "esbuild"],
+      "css": ["tailwindcss", "scss", "styled-components"]
+    },
+    "experience": {
+      "react": "expert",
+      "vue": "intermediate",
+      "angular": "beginner",
+      "nodejs": "expert",
+      "express": "expert",
+      "typescript": "expert"
+    }
+  },
+  "tools": {
+    "preferred": [
+      "vscode",
+      "git",
+      "npm",
+      "eslint",
+      "prettier",
+      "jest",
+      "typescript",
+      "copilot"
+    ],
+    "disabled": [],
+    "shortcuts": {
+      "build": "Ctrl+Shift+B",
+      "debug": "F5",
+      "test": "Ctrl+Shift+T",
+      "format": "Shift+Alt+F"
+    }
+  },
+  "projectTypes": {
+    "templates": {
+      "webapp": {
+        "stack": ["react", "typescript", "tailwindcss", "vite"],
+        "structure": "src/components, src/pages, src/utils, src/types",
+        "testing": "jest + @testing-library/react"
+      },
+      "api": {
+        "stack": ["nodejs", "express", "typescript"],
+        "structure": "src/routes, src/models, src/services, src/middleware",
+        "testing": "jest + supertest"
+      },
+      "library": {
+        "stack": ["typescript", "rollup", "jest"],
+        "structure": "src/index.ts, src/types, tests/",
+        "testing": "jest"
+      }
+    },
+    "defaultStructure": {
+      "srcDir": "src",
+      "testDir": "tests",
+      "buildDir": "dist",
+      "configDir": "config",
+      "docsDir": "docs"
+    }
+  },
+  "memory": {
+    "autoStore": true,
+    "layers": {
+      "userPreferences": true,
+      "projectContext": true,
+      "selfHealing": true
+    },
+    "retention": {
+      "userPreferences": "permanent",
+      "projectContext": "1year",
+      "selfHealing": "6months"
+    },
+    "backup": {
+      "enabled": true,
+      "frequency": "weekly",
+      "keepCount": 5
+    }
+  },
+  "modes": {
+    "default": "general",
+    "favorites": ["architect", "debugger", "refactor"],
+    "custom": {},
+    "settings": {
+      "showModeInStatusBar": true,
+      "allowModeSwitch": true,
+      "rememberLastMode": true
+    }
+  },
+  "notifications": {
+    "enabled": true,
+    "level": "info",
+    "showProgress": true,
+    "showSuccess": true,
+    "showErrors": true,
+    "categories": {
+      "memory": true,
+      "modes": true,
+      "project": true,
+      "server": false
+    }
+  },
+  "performance": {
+    "cacheSize": "25MB",
+    "maxConcurrentRequests": 5,
+    "enableCompression": true,
+    "preloadCommonPatterns": true
+  },
+  "privacy": {
+    "shareAnalytics": false,
+    "shareErrorReports": false,
+    "storeLocally": true,
+    "encryptSensitiveData": true
+  },
+  "advanced": {
+    "debugMode": false,
+    "experimentalFeatures": false,
+    "customPrompts": {},
+    "apiEndpoints": {},
+    "webhooks": []
+  },
+  "_metadata": {
+    "createdBy": "Copilot MCP Toolset",
+    "schemaVersion": "1.0.0",
+    "templateVersion": "1.0.0",
+    "supportedPlatforms": ["windows", "macos", "linux"],
+    "requiredVersion": "1.0.0"
+  },
+  "_examples": {
+    "_description": "Example configurations for different scenarios",
+    "_beginnerSettings": {
+      "codingStyle.formatting.tabSize": 4,
+      "modes.default": "general",
+      "notifications.level": "all",
+      "advanced.debugMode": false
+    },
+    "_expertSettings": {
+      "codingStyle.patterns.preferFunctional": true,
+      "modes.default": "architect",
+      "notifications.level": "errors",
+      "advanced.debugMode": true
+    },
+    "_teamLeadSettings": {
+      "modes.favorites": ["architect", "reviewer", "documenter"],
+      "memory.retention.projectContext": "2years",
+      "notifications.showProgress": true
+    }
+  }
+}

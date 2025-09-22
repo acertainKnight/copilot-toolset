@@ -1,0 +1,111 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/copilot-mcp/toolset/schemas/mcp-config.schema.json",
+  "title": "MCP Configuration Schema",
+  "description": "Schema for Model Context Protocol (MCP) client configuration",
+  "type": "object",
+  "properties": {
+    "mcpVersion": {
+      "type": "string",
+      "description": "MCP protocol version",
+      "enum": ["2024-11-05"],
+      "default": "2024-11-05"
+    },
+    "servers": {
+      "type": "object",
+      "description": "MCP server configurations",
+      "patternProperties": {
+        "^[a-zA-Z0-9_-]+$": {
+          "type": "object",
+          "properties": {
+            "command": {
+              "type": "string",
+              "description": "Command to start the MCP server"
+            },
+            "args": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Command line arguments for the server"
+            },
+            "env": {
+              "type": "object",
+              "patternProperties": {
+                "^[A-Z][A-Z0-9_]*$": {
+                  "type": "string"
+                }
+              },
+              "description": "Environment variables for the server"
+            },
+            "cwd": {
+              "type": "string",
+              "description": "Working directory for the server process"
+            },
+            "timeout": {
+              "type": "number",
+              "minimum": 1000,
+              "maximum": 300000,
+              "description": "Server startup timeout in milliseconds",
+              "default": 10000
+            },
+            "capabilities": {
+              "type": "object",
+              "properties": {
+                "tools": {
+                  "type": "boolean",
+                  "description": "Enable tools capability",
+                  "default": true
+                },
+                "resources": {
+                  "type": "boolean",
+                  "description": "Enable resources capability",
+                  "default": true
+                },
+                "prompts": {
+                  "type": "boolean",
+                  "description": "Enable prompts capability",
+                  "default": true
+                },
+                "notifications": {
+                  "type": "boolean",
+                  "description": "Enable notifications capability",
+                  "default": false
+                }
+              },
+              "additionalProperties": false
+            },
+            "workspace": {
+              "type": "object",
+              "properties": {
+                "projectType": {
+                  "type": "string",
+                  "enum": ["auto-detect", "react", "vue", "angular", "node", "python", "rust", "go", "java", "typescript", "javascript"],
+                  "description": "Project type hint for the MCP server",
+                  "default": "auto-detect"
+                },
+                "memoryScope": {
+                  "type": "string",
+                  "enum": ["global", "isolated", "shared"],
+                  "description": "Memory isolation level",
+                  "default": "isolated"
+                },
+                "enableAutoInit": {
+                  "type": "boolean",
+                  "description": "Automatically initialize projects",
+                  "default": true
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": ["command"],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": ["mcpVersion", "servers"],
+  "additionalProperties": false
+}
