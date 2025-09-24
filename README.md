@@ -2,11 +2,11 @@
 
 **Transform GitHub Copilot into a context-aware coding assistant with persistent memory, custom chat modes, and intelligent project initialization.**
 
-🧠 **Persistent Memory** - Three-tier memory system that learns your patterns and preferences
+🧠 **Persistent Memory** - Unified database with dual-tier memory that learns your patterns and preferences
 🤖 **Custom Chat Modes** - Create specialized AI assistants (Architect, Debugger, Tester, etc.)
 🏗️ **Smart Project Setup** - Automatic context generation with `.github/copilot-instructions.md` support
-⚡ **8 MCP Tools** - Project initialization, memory management, chat modes, and self-healing
-🔒 **100% Local** - Complete privacy with no external API calls or data transmission
+⚡ **8 MCP Tools** - Project initialization, unified memory management, chat modes, and self-healing
+🔒 **100% Local** - Complete privacy with single SQLite database, no external API calls
 
 ## ✨ What You Get
 
@@ -14,8 +14,8 @@
 - 🧠 **Learns Your Style**: Remembers preferences and applies them across all projects
 - 🤖 **Specialized Modes**: Architect, debugger, refactorer, tester modes available instantly
 - 🏗️ **Auto Project Setup**: Creates context files GitHub Copilot uses automatically
-- ⚡ **Smart Memory**: Three-tier system (core/warm/cold) with automatic optimization
-- 📁 **Context Awareness**: Understands your project structure, patterns, and decisions
+- ⚡ **Unified Memory**: Dual-tier system (core/longterm) with global/project bifurcation
+- 📁 **Context Awareness**: Single database storing all project patterns and decisions
 
 ## 🚀 Quick Demo (3 Commands)
 
@@ -33,7 +33,7 @@ npm install && npm run build
 ```
 @copilot Initialize this project
 ```
-*Creates `.github/copilot-instructions.md`, context files, and memory system*
+*Creates `.github/copilot-instructions.md`, context files, and initializes unified memory database*
 
 ### Step 3: Try the Magic
 ```

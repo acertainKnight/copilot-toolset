@@ -6,8 +6,29 @@ import { z } from 'zod';
 
 // ==================== Memory System Types ====================
 
+// New dual-tier, bifurcated memory architecture
+export type MemoryTier = 'core' | 'longterm';
+export type MemoryScope = 'global' | 'project';
+
+// Legacy layers for backward compatibility
 export type MemoryLayer = 'preference' | 'project' | 'prompt' | 'system';
 
+export interface UnifiedMemory {
+  id: string;
+  content: string;
+  tier: MemoryTier; // core (2KB limit) or longterm (unlimited)
+  scope: MemoryScope; // global (cross-project) or project (project-specific)
+  project_id?: string; // Required for project-scoped memories
+  tags?: string[];
+  created_at: Date;
+  accessed_at: Date;
+  access_count: number;
+  metadata?: Record<string, any>;
+  // Size tracking for core tier limit enforcement
+  content_size: number;
+}
+
+// Legacy Memory interface for backward compatibility
 export interface Memory {
   id?: string;
   content: string;
@@ -166,14 +187,30 @@ export interface MCPToolCallResponse {
 
 // ==================== Validation Schemas ====================
 
+// New unified memory store schema
+export const UnifiedMemoryStoreSchema = z.object({
+  content: z.string().min(1),
+  tier: z.enum(['core', 'longterm']).describe('Memory tier: core (2KB limit, always accessible) or longterm (unlimited storage)'),
+  scope: z.enum(['global', 'project']).describe('Memory scope: global (cross-project) or project (project-specific)'),
+  project_id: z.string().optional().describe('Required for project-scoped memories'),
+  tags: z.array(z.string()).optional().default([]),
+  metadata: z.record(z.any()).optional(),
+});
+
+// Legacy schema for backward compatibility
 export const MemoryStoreSchema = z.object({
   content: z.string().min(1),
   layer: z.enum(['preference', 'project', 'prompt', 'system']),
   tags: z.array(z.string()).optional().default([]),
 });
 
+// Updated search schema supporting both new and legacy approaches
 export const MemorySearchSchema = z.object({
   query: z.string().min(1),
+  tier: z.enum(['core', 'longterm']).optional().describe('Filter by memory tier'),
+  scope: z.enum(['global', 'project']).optional().describe('Filter by memory scope'),
+  project_id: z.string().optional().describe('Filter by specific project (for project-scoped search)'),
+  // Legacy support
   layer: z.enum(['preference', 'project', 'prompt', 'system']).optional(),
   limit: z.number().min(1).max(100).optional().default(10),
   minScore: z.number().min(0).max(1).optional().default(0.5),

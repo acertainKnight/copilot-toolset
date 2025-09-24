@@ -9,12 +9,18 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
 import { Memory, MemoryLayer, MemorySearchOptions, MemorySearchResult, MemoryStats } from '../types/index.js';
+import { DualSearchEngine } from './DualSearchEngine.js';
+import { SearchIndexManager } from './SearchIndexManager.js';
 
 export class MemoryManager {
   private database!: Database.Database;
   private globalDbPath: string;
   private projectPath?: string;
   private isInitialized = false;
+
+  // Advanced search components
+  private dualSearchEngine?: DualSearchEngine;
+  private searchIndexManager?: SearchIndexManager;
 
   constructor(projectPath?: string) {
     this.projectPath = projectPath;
@@ -86,11 +92,59 @@ export class MemoryManager {
   }
 
   /**
-   * Advanced search across global SQLite database with grep-style pattern matching
+   * Advanced dual search (BM25 + TF-IDF) across global SQLite database
    * GitHub Copilot should use this BEFORE any coding actions or implementation planning
    */
   public async search(query: string, options: MemorySearchOptions = {}): Promise<MemorySearchResult[]> {
     await this.initialize();
+
+    try {
+      // Initialize dual search engine if not already done
+      if (!this.dualSearchEngine) {
+        await this.initializeDualSearch();
+      }
+
+      // Get all memories for TF-IDF component
+      const allMemories = await this.getAllMemories(options);
+
+      // Use dual search engine for optimal results
+      const dualResults = await this.dualSearchEngine!.search(query, allMemories, {
+        layer: options.layer,
+        limit: options.limit || 10,
+        searchMode: options.search_type === 'semantic' ? 'tfidf_only' :
+                   options.search_type === 'text' ? 'bm25_only' : 'hybrid',
+        minBM25Score: options.similarity_threshold || 0.1,
+        minTFIDFScore: options.similarity_threshold || 0.1,
+        contextualBoost: true,
+        temporalDecay: true
+      });
+
+      // Convert dual results to standard format
+      const results: MemorySearchResult[] = dualResults.map(result => ({
+        memory: result.memory,
+        similarity_score: result.fusion_score,
+        match_type: result.match_type,
+        context: result.context
+      }));
+
+      // Update access counts for retrieved memories
+      for (const result of results) {
+        await this.updateAccessCount(result.memory.id!);
+      }
+
+      return results;
+
+    } catch (error) {
+      console.error('[WARN] Dual search failed, falling back to legacy search:', error);
+      // Fallback to original search method
+      return this.legacySearch(query, options);
+    }
+  }
+
+  /**
+   * Fallback legacy search method
+   */
+  private async legacySearch(query: string, options: MemorySearchOptions): Promise<MemorySearchResult[]> {
     const results: MemorySearchResult[] = [];
 
     // Search single global database for all memories
@@ -332,11 +386,103 @@ export class MemoryManager {
     }
   }
 
+  /**
+   * Initialize dual search engine
+   */
+  private async initializeDualSearch(): Promise<void> {
+    if (!this.dualSearchEngine) {
+      this.dualSearchEngine = new DualSearchEngine(this.database);
+      await this.dualSearchEngine.initialize();
+    }
+
+    if (!this.searchIndexManager) {
+      this.searchIndexManager = new SearchIndexManager(this.database, {
+        rebuildThreshold: 0.2,
+        optimizeInterval: 60,
+        backgroundMode: true
+      });
+    }
+  }
+
+  /**
+   * Get all memories filtered by options
+   */
+  private async getAllMemories(options: MemorySearchOptions): Promise<Memory[]> {
+    let sql = 'SELECT * FROM memories WHERE 1=1';
+    const params: any[] = [];
+
+    if (options.layer) {
+      sql += ' AND layer = ?';
+      params.push(options.layer);
+    }
+
+    if (this.projectPath && (options.layer === 'project' || options.layer === 'prompt')) {
+      sql += ' AND (project_path = ? OR project_path IS NULL)';
+      params.push(this.projectPath);
+    }
+
+    sql += ' ORDER BY accessed_at DESC';
+
+    const stmt = this.database.prepare(sql);
+    const rows = stmt.all(...params) as any[];
+
+    return rows.map(row => ({
+      id: row.id,
+      content: row.content,
+      layer: row.layer,
+      tags: JSON.parse(row.tags || '[]'),
+      created_at: new Date(row.created_at),
+      accessed_at: new Date(row.accessed_at),
+      access_count: row.access_count,
+      metadata: JSON.parse(row.metadata || '{}')
+    }));
+  }
+
+  /**
+   * Get advanced search statistics
+   */
+  public async getAdvancedSearchStats(): Promise<any> {
+    if (!this.dualSearchEngine) {
+      await this.initializeDualSearch();
+    }
+
+    const dualStats = this.dualSearchEngine!.getSearchStatistics();
+    const indexStats = this.searchIndexManager ?
+      await this.searchIndexManager.getIndexStatistics() : null;
+
+    return {
+      dualSearch: dualStats,
+      indexManagement: indexStats,
+      lastUpdated: new Date()
+    };
+  }
+
+  /**
+   * Perform search index maintenance
+   */
+  public async performMaintenance(): Promise<void> {
+    if (!this.searchIndexManager) {
+      await this.initializeDualSearch();
+    }
+
+    await this.searchIndexManager!.performMaintenanceCycle();
+    await this.dualSearchEngine!.optimize();
+  }
+
   public async close(): Promise<void> {
     try {
+      if (this.dualSearchEngine) {
+        await this.dualSearchEngine.reset();
+      }
+
+      if (this.searchIndexManager) {
+        this.searchIndexManager.shutdown();
+      }
+
       if (this.database) {
         this.database.close();
       }
+
       this.isInitialized = false;
     } catch (error) {
       console.error('[ERROR] Failed to close memory system:', error);

@@ -1,44 +1,48 @@
 # Basic Memory Operations
 
-**Goal**: Learn the three-tier memory system with practical examples in 5 minutes.
+**Goal**: Learn the unified dual-tier memory system with practical examples in 5 minutes.
 
 ## Prerequisites
 
 - MCP server built and tested ([first-project.md](first-project.md))
-- Project initialized with `.copilot/memory/` directory
+- Project initialized with unified memory database
 
-## Understanding Memory Layers
+## Understanding Unified Memory Architecture
 
-The system uses three memory tiers:
+The system uses a single SQLite database with dual-tier, bifurcated architecture:
 
-- **Core Memory** (Map): Always active, 2KB limit - user preferences, active context
-- **Warm Storage** (LevelDB): Recent patterns, project data - cached for fast access
-- **Cold Storage** (SQLite): Long-term knowledge - searchable database with embeddings
+- **Core Tier**: High-priority memories (2KB limit per item, always accessible)
+- **Long-term Tier**: Comprehensive storage (unlimited size, detailed information)
+- **Global Scope**: Shared across ALL projects (preferences, patterns, solutions)
+- **Project Scope**: Isolated to specific projects (architecture, project context)
 
-## Step 1: Store Information in Different Layers (2 minutes)
+## Step 1: Store Information in Different Tiers and Scopes (2 minutes)
 
 ```bash
-# Store user preference (global, core memory)
-echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"store_memory","arguments":{"key":"coding-style","value":"I prefer TypeScript with strict typing and detailed comments","layer":"preference"}},"id":1}' | node dist/server/index.js
+# Store user preference (global scope, core tier)
+echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"store_unified_memory","arguments":{"content":"I prefer TypeScript with strict typing and detailed comments","tier":"core","scope":"global","tags":["coding-style","typescript"]}},"id":1}' | node dist/server/index.js
 
-# Store project context (workspace-specific)
-echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"store_memory","arguments":{"key":"architecture","value":"Using React with TypeScript, Redux for state management, and Jest for testing","layer":"project"}},"id":1}' | node dist/server/index.js --workspace=/path/to/your/project
+# Store project context (project scope, core tier)
+echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"store_unified_memory","arguments":{"content":"Using React with TypeScript, Redux for state management, and Jest for testing","tier":"core","scope":"project","project_id":"/path/to/your/project","tags":["architecture","react"]}},"id":1}' | node dist/server/index.js --workspace=/path/to/your/project
 
-# Store system pattern (global knowledge)
-echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"store_memory","arguments":{"key":"react-testing-pattern","value":"Always test components with @testing-library/react, mock external dependencies, test user interactions","layer":"system"}},"id":1}' | node dist/server/index.js
+# Store detailed system pattern (global scope, longterm tier)
+echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"store_unified_memory","arguments":{"content":"React Testing Best Practices: Always test components with @testing-library/react, mock external dependencies, test user interactions not implementation details, use data-testid sparingly","tier":"longterm","scope":"global","tags":["react","testing","best-practices"]}},"id":1}' | node dist/server/index.js
 ```
 
-## Step 2: Search Across Memory Layers (2 minutes)
+## Step 2: Search Across Memory Tiers and Scopes (2 minutes)
 
 ```bash
-# Search for coding preferences
-echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"search_memory","arguments":{"query":"TypeScript coding style","layer":"preference"}},"id":1}' | node dist/server/index.js
+# Search for coding preferences (global scope)
+echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"search_unified_memory","arguments":{"query":"TypeScript coding style","scope":"global"}},"id":1}' | node dist/server/index.js
 
-# Search project-specific information
-echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"search_memory","arguments":{"query":"React architecture","layer":"project"}},"id":1}' | node dist/server/index.js --workspace=/path/to/your/project
+# Search project-specific information (project scope)
+echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"search_unified_memory","arguments":{"query":"React architecture","scope":"project","project_id":"/path/to/your/project"}},"id":1}' | node dist/server/index.js --workspace=/path/to/your/project
 
-# Search across all layers
-echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"search_memory","arguments":{"query":"testing patterns"}},"id":1}' | node dist/server/index.js --workspace=/path/to/your/project
+# Search across all tiers and scopes with BM25 + semantic search
+echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"search_unified_memory","arguments":{"query":"testing patterns","limit":10}},"id":1}' | node dist/server/index.js --workspace=/path/to/your/project
+
+# Search only core tier (high-priority memories)
+echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"search_unified_memory","arguments":{"query":"preferences","tier":"core"}},"id":1}' | node dist/server/index.js
 ```
 
 ## Step 3: Check Memory Statistics (1 minute)

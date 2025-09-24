@@ -8,24 +8,21 @@ import * as path from 'path';
 import { glob } from 'glob';
 import simpleGit from 'simple-git';
 import { ProjectContext, DependencyInfo, ArchitecturePattern, CodingConvention, ProjectCommand, ProjectStructureNode } from '../types/index.js';
+import { UnifiedMemoryManager } from '../memory/UnifiedMemoryManager.js';
 
 export class ProjectInitializer {
   private git = simpleGit();
 
-  public async initialize(projectPath: string): Promise<string> {
+  public async initialize(projectPath: string, userProvidedName?: string): Promise<string> {
     try {
       console.error(`[INFO] Initializing project with comprehensive analysis: ${projectPath}`);
 
       // Perform comprehensive project analysis
-      const analysis = await this.analyzeProject(projectPath);
+      const analysis = await this.analyzeProject(projectPath, userProvidedName);
 
       // Create .github directory
       const githubDir = path.join(projectPath, '.github');
       await fs.mkdir(githubDir, { recursive: true });
-
-      // Create .copilot memory directory
-      const memoryDir = path.join(projectPath, '.copilot', 'memory');
-      await fs.mkdir(memoryDir, { recursive: true });
 
       // Generate GitHub Copilot instructions with memory guidance
       const copilotInstructions = this.generateCopilotInstructions(analysis);
@@ -37,15 +34,15 @@ export class ProjectInitializer {
       const copilotMdPath = path.join(projectPath, 'COPILOT.md');
       await fs.writeFile(copilotMdPath, copilotMd);
 
-      // Initialize memory files
-      await this.initializeMemoryFiles(memoryDir);
+      // Initialize project in unified memory database
+      await this.initializeProjectMemory(projectPath, analysis);
 
       return `Project initialized successfully with comprehensive analysis!
 
 Generated files:
 - ${instructionsPath}
 - ${copilotMdPath}
-- ${memoryDir}/ (memory system)
+- Initialized project memory in unified database
 
 Analysis results:
 - Project type: ${analysis.type}
@@ -60,7 +57,7 @@ Analysis results:
     }
   }
 
-  private async analyzeProject(projectPath: string): Promise<ProjectContext> {
+  private async analyzeProject(projectPath: string, userProvidedName?: string): Promise<ProjectContext> {
     const [
       projectType,
       structure,
@@ -82,6 +79,9 @@ Analysis results:
     const language = this.getLanguageForType(projectType);
     const framework = this.getFrameworkForType(projectType, dependencies);
 
+    // Enhanced project name detection with deduplication
+    const projectName = await this.detectAndValidateProjectName(projectPath, userProvidedName, gitInfo);
+
     return {
       type: projectType,
       framework,
@@ -89,6 +89,7 @@ Analysis results:
       packageManager: this.detectPackageManager(projectPath),
       testFramework: this.detectTestFramework(dependencies),
       buildTool: this.detectBuildTool(projectPath),
+      projectName, // Add project name to context
       structure,
       dependencies,
       conventions,
@@ -402,37 +403,75 @@ Analysis results:
     return commands;
   }
 
-  private async initializeMemoryFiles(memoryDir: string): Promise<void> {
-    const memoryFiles = [
-      {
-        name: 'activeContext.md',
-        content: '# Active Context\n\nCurrent session context and temporary notes.\n'
-      },
-      {
-        name: 'decisionLog.md',
-        content: '# Decision Log\n\nArchitectural decisions and their rationale.\n'
-      },
-      {
-        name: 'productContext.md',
-        content: '# Product Context\n\nFeature requirements and product specifications.\n'
-      },
-      {
-        name: 'progress.md',
-        content: '# Progress Tracking\n\nDevelopment progress and milestones.\n'
-      },
-      {
-        name: 'systemPatterns.md',
-        content: '# System Patterns\n\nReusable patterns and error solutions.\n'
-      }
-    ];
+  /**
+   * Initialize project-specific memories in the unified database
+   */
+  private async initializeProjectMemory(projectPath: string, analysis: ProjectContext): Promise<void> {
+    try {
+      const memoryManager = new UnifiedMemoryManager(projectPath);
+      await memoryManager.initialize();
 
-    for (const file of memoryFiles) {
-      const filePath = path.join(memoryDir, file.name);
-      const exists = await fs.access(filePath).then(() => true).catch(() => false);
+      // Store initial project context in core tier, project scope
+      await memoryManager.storeMemory({
+        content: `Project: ${analysis.projectName || path.basename(projectPath)}
+Type: ${analysis.type}
+Language: ${analysis.language}
+Framework: ${analysis.framework || 'None'}
+Architecture patterns: ${analysis.patterns.map(p => p.name).join(', ')}
+Key dependencies: ${analysis.dependencies.slice(0, 5).map(d => d.name).join(', ')}`,
+        tier: 'core',
+        scope: 'project',
+        project_id: projectPath,
+        tags: ['project-context', 'initialization', analysis.type.toLowerCase()],
+        metadata: {
+          initialized_at: new Date().toISOString(),
+          project_type: analysis.type,
+          language: analysis.language,
+          framework: analysis.framework
+        }
+      });
 
-      if (!exists) {
-        await fs.writeFile(filePath, file.content);
+      // Store architectural patterns in long-term memory
+      for (const pattern of analysis.patterns.slice(0, 3)) { // Limit to top 3 patterns
+        await memoryManager.storeMemory({
+          content: `Architecture Pattern: ${pattern.name}
+Description: ${pattern.description}
+Confidence: ${Math.round(pattern.confidence * 100)}%
+Files: ${pattern.files.slice(0, 3).join(', ')}`,
+          tier: 'longterm',
+          scope: 'project',
+          project_id: projectPath,
+          tags: ['architecture', 'pattern', pattern.type],
+          metadata: {
+            pattern_name: pattern.name,
+            confidence: pattern.confidence,
+            pattern_type: pattern.type
+          }
+        });
       }
+
+      // Store coding conventions
+      for (const convention of analysis.conventions.slice(0, 5)) {
+        await memoryManager.storeMemory({
+          content: `Coding Convention: ${convention.rule}
+Category: ${convention.category}
+Source: ${convention.source}
+${convention.example ? `Example: ${convention.example}` : ''}`,
+          tier: 'longterm',
+          scope: 'project',
+          project_id: projectPath,
+          tags: ['convention', 'coding-style', convention.category],
+          metadata: {
+            category: convention.category,
+            source: convention.source
+          }
+        });
+      }
+
+      console.error(`[INFO] Initialized project memory for: ${analysis.projectName || path.basename(projectPath)}`);
+    } catch (error) {
+      console.error('[WARN] Failed to initialize project memory:', error);
+      // Don't fail the entire initialization if memory setup fails
     }
   }
 
@@ -483,19 +522,21 @@ search_memory "known issues this project"
 
 ## Memory System Usage for GitHub Copilot
 
-### Memory Layers (SQLite-based storage)
+### Unified Database Memory Architecture
 
-**Global Memories (shared across ALL projects):**
-- \`preference\`: User coding preferences, styles, and patterns
-- \`system\`: Proven solutions, error patterns, debugging strategies
+**Single SQLite Database Location:** \`~/.copilot-mcp/memory/unified.db\`
 
-**Project Memories (isolated to THIS project):**
-- \`project\`: Project-specific context, architecture, and decisions  
-- \`prompt\`: Session context, temporary notes, work-in-progress ideas
+**Memory Tiers:**
+- \`core\`: High-priority, always-accessible memories (2KB limit per item)
+- \`longterm\`: Comprehensive storage for detailed information (unlimited)
 
-### Store User Preferences (Global - layer="preference")
+**Memory Scopes:**
+- \`global\`: Shared across ALL projects (preferences, coding patterns, proven solutions)
+- \`project\`: Isolated to specific projects (architecture decisions, project context)
+
+### Store User Preferences (Global Scope, Core Tier)
 \`\`\`
-@copilot Use store_memory tool with layer="preference" for:
+@copilot Use store_unified_memory tool with scope="global", tier="core" for:
 - Coding style preferences (functional vs OOP)
 - Preferred libraries and frameworks (e.g., "always use loguru for Python logging")
 - Testing approaches and methodologies
@@ -503,53 +544,43 @@ search_memory "known issues this project"
 - Error handling patterns
 \`\`\`
 
-### Store Project Context (Project-Specific - layer="project")
+### Store Project Context (Project Scope, Core Tier)
 \`\`\`
-@copilot Use store_memory tool with layer="project" for:
+@copilot Use store_unified_memory tool with scope="project", tier="core" for:
 - Architecture decisions for THIS project
 - API patterns and conventions
 - Database schema decisions
 - Project-specific patterns and conventions
 - Technology stack choices and rationale
-- Performance requirements and constraints
 \`\`\`
 
-### Store Session Context (Temporary - layer="prompt")
+### Store Detailed Information (Long-term Tier)
 \`\`\`
-@copilot Use store_memory tool with layer="prompt" for:
-- Current conversation context
-- Temporary notes and ideas  
-- Work-in-progress decisions
-- Session-specific insights
-\`\`\`
-
-### Store System Patterns (Global - layer="system")
-\`\`\`
-@copilot Use store_memory tool with layer="system" for:
-- Error patterns and proven solutions
-- Debugging strategies that work
-- Performance optimization techniques
-- Security best practices
-- Code refactoring patterns
+@copilot Use store_unified_memory tool with tier="longterm" for:
+- Comprehensive documentation and guides
+- Detailed error solutions and debugging approaches
+- Performance optimization techniques and results
+- Security best practices and implementations
+- Code refactoring patterns and examples
 \`\`\`
 
 ## Automatic Context Recognition
 
 When you detect these patterns, store them automatically:
 
-**User Preferences (store globally):**
-- "I prefer functional programming" → layer="preference"
-- "Always use TypeScript strict mode" → layer="preference"
-- "Use Jest for testing" → layer="preference"
+**User Preferences (store in global scope, core tier):**
+- "I prefer functional programming" → scope="global", tier="core"
+- "Always use TypeScript strict mode" → scope="global", tier="core"
+- "Use Jest for testing" → scope="global", tier="core"
 
-**Project Decisions (store for this project):**
-- "This API uses JWT authentication" → layer="project"
-- "Database schema follows DDD patterns" → layer="project"
-- "Components use styled-components" → layer="project"
+**Project Decisions (store in project scope, core tier):**
+- "This API uses JWT authentication" → scope="project", tier="core"
+- "Database schema follows DDD patterns" → scope="project", tier="core"
+- "Components use styled-components" → scope="project", tier="core"
 
-**Error Solutions (store globally):**
-- "Fixed React hydration error by..." → layer="system"
-- "Database connection pool issues solved by..." → layer="system"
+**Detailed Solutions (store in global scope, longterm tier):**
+- "Fixed React hydration error by..." → scope="global", tier="longterm"
+- "Database connection pool issues solved by..." → scope="global", tier="longterm"
 
 ## Project Context
 
@@ -629,10 +660,10 @@ search_memory "known issues this project"
 
 ### Memory Storage Strategy
 
-- **Preferences** → Global across all projects (layer="preference")
-- **Project Context** → This project only (layer="project")
-- **Error Solutions** → Global system patterns (layer="system")
-- **Session Notes** → Temporary conversation context (layer="prompt")
+- **User Preferences** → Global scope, core tier (shared across all projects)
+- **Project Context** → Project scope, core tier (isolated to this project)
+- **Detailed Solutions** → Global scope, longterm tier (comprehensive knowledge base)
+- **Project Documentation** → Project scope, longterm tier (detailed project information)
 
 ## Project Analysis
 
@@ -782,5 +813,295 @@ ${analysis.gitInfo ? `
     };
 
     return descriptions[name] || `Run: ${command}`;
+  }
+
+  /**
+   * Enhanced project name detection with multiple sources and deduplication checking
+   * Priority order: User provided > package.json > pyproject.toml > git remote > directory name
+   */
+  private async detectAndValidateProjectName(projectPath: string, userProvidedName?: string, gitInfo?: any): Promise<string> {
+    console.error('[INFO] Starting enhanced project name detection...');
+
+    // Step 1: Collect all potential project names
+    const candidates = await this.collectProjectNameCandidates(projectPath, userProvidedName, gitInfo);
+    console.error(`[INFO] Found ${candidates.length} project name candidates: ${candidates.join(', ')}`);
+
+    // Step 2: Select primary candidate
+    const primaryName = candidates[0] || path.basename(projectPath);
+    console.error(`[INFO] Primary project name candidate: "${primaryName}"`);
+
+    // Step 3: Check for similar existing projects in database
+    const similarProjects = await this.findSimilarProjects(primaryName, projectPath);
+
+    // Step 4: Handle deduplication if similar projects exist
+    if (similarProjects.length > 0) {
+      console.error(`[WARN] Found ${similarProjects.length} similar projects in database:`);
+      similarProjects.forEach((proj, idx) => {
+        console.error(`  ${idx + 1}. "${proj.name}" (path: ${proj.path})`);
+      });
+
+      // Auto-resolve if exact path match (same project re-initialization)
+      const exactMatch = similarProjects.find(p => p.path === projectPath);
+      if (exactMatch) {
+        console.error(`[INFO] Exact path match found. Reusing project name: "${exactMatch.name}"`);
+        return exactMatch.name;
+      }
+
+      // For now, append path-based suffix for uniqueness
+      // In a full implementation, this would prompt the user for confirmation
+      const uniqueName = await this.generateUniqueProjectName(primaryName, projectPath, similarProjects);
+      console.error(`[INFO] Generated unique project name: "${uniqueName}"`);
+      return uniqueName;
+    }
+
+    console.error(`[INFO] No similar projects found. Using: "${primaryName}"`);
+    return primaryName;
+  }
+
+  /**
+   * Collect project name candidates from multiple sources in priority order
+   */
+  private async collectProjectNameCandidates(projectPath: string, userProvidedName?: string, gitInfo?: any): Promise<string[]> {
+    const candidates: string[] = [];
+
+    // Priority 1: User-provided name (highest priority)
+    if (userProvidedName?.trim()) {
+      candidates.push(userProvidedName.trim());
+    }
+
+    // Priority 2: package.json name field
+    try {
+      const packageJsonPath = path.join(projectPath, 'package.json');
+      const packageContent = await fs.readFile(packageJsonPath, 'utf8');
+      const pkg = JSON.parse(packageContent);
+      if (pkg.name && typeof pkg.name === 'string') {
+        // Clean npm package names (remove scopes like @org/package)
+        const cleanName = pkg.name.includes('/') ? pkg.name.split('/').pop()! : pkg.name;
+        if (cleanName !== 'undefined' && cleanName !== 'null') {
+          candidates.push(cleanName);
+        }
+      }
+    } catch {
+      // package.json not found or invalid
+    }
+
+    // Priority 3: pyproject.toml name field
+    try {
+      const pyprojectPath = path.join(projectPath, 'pyproject.toml');
+      const pyprojectContent = await fs.readFile(pyprojectPath, 'utf8');
+      // Simple TOML parsing for name field
+      const nameMatch = pyprojectContent.match(/^\s*name\s*=\s*["']([^"']+)["']/m);
+      if (nameMatch && nameMatch[1]) {
+        candidates.push(nameMatch[1]);
+      }
+    } catch {
+      // pyproject.toml not found or invalid
+    }
+
+    // Priority 4: Git repository name (from remote origin URL)
+    if (gitInfo?.remotes?.length > 0) {
+      const originRemote = gitInfo.remotes.find((r: any) => r.name === 'origin') || gitInfo.remotes[0];
+      if (originRemote?.url) {
+        const repoName = this.extractRepoNameFromUrl(originRemote.url);
+        if (repoName) {
+          candidates.push(repoName);
+        }
+      }
+    }
+
+    // Priority 5: Directory basename (fallback)
+    const dirName = path.basename(projectPath);
+    if (dirName !== '.' && dirName !== '..') {
+      candidates.push(dirName);
+    }
+
+    // Clean and filter candidates
+    return candidates
+      .map(name => this.cleanProjectName(name))
+      .filter((name, index, array) =>
+        name &&
+        name.length > 0 &&
+        array.indexOf(name) === index // Remove duplicates
+      );
+  }
+
+  /**
+   * Extract repository name from Git remote URL
+   */
+  private extractRepoNameFromUrl(url: string): string | null {
+    try {
+      // Handle various Git URL formats:
+      // https://github.com/user/repo.git -> repo
+      // git@github.com:user/repo.git -> repo
+      // https://gitlab.com/user/repo -> repo
+
+      const patterns = [
+        /\/([^\/]+?)(?:\.git)?$/,  // Match last path segment before optional .git
+        /:([^\/]+?)(?:\.git)?$/   // Match after colon (SSH format)
+      ];
+
+      for (const pattern of patterns) {
+        const match = url.match(pattern);
+        if (match && match[1]) {
+          return match[1];
+        }
+      }
+
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Clean and normalize project names
+   */
+  private cleanProjectName(name: string): string {
+    return name
+      .toLowerCase()
+      .replace(/[^a-z0-9\-_]/g, '-') // Replace invalid chars with hyphens
+      .replace(/-+/g, '-') // Collapse multiple hyphens
+      .replace(/^-|-$/g, '') // Remove leading/trailing hyphens
+      .trim();
+  }
+
+  /**
+   * Find similar projects in the unified memory database
+   */
+  private async findSimilarProjects(projectName: string, currentPath: string): Promise<{name: string, path: string}[]> {
+    try {
+      const memoryManager = new UnifiedMemoryManager();
+      await memoryManager.initialize();
+
+      // Search for project-scoped memories to find existing projects
+      const searchResults = await memoryManager.searchMemories({
+        query: `project:${projectName}`,
+        tier: 'core',
+        scope: 'project',
+        limit: 50
+      });
+
+      // Extract unique project names and paths from search results
+      const projects = new Map<string, string>();
+
+      for (const result of searchResults) {
+        if (result.project_id && result.project_id !== currentPath) {
+          // Try to extract project name from project_id or content
+          const projectPath = result.project_id;
+          const detectedName = path.basename(projectPath);
+
+          // Check if this project name is similar to our target
+          if (this.isProjectNameSimilar(projectName, detectedName)) {
+            projects.set(detectedName, projectPath);
+          }
+        }
+      }
+
+      // Also search memory content for project references
+      const contentSearch = await memoryManager.searchMemories({
+        query: projectName,
+        limit: 20
+      });
+
+      for (const result of contentSearch) {
+        // Look for project references in content
+        const projectMatches = result.content.match(/project[:\s]+"?([^"\s,]+)"?/gi);
+        if (projectMatches) {
+          for (const match of projectMatches) {
+            const nameMatch = match.match(/project[:\s]+"?([^"\s,]+)"?/i);
+            if (nameMatch && nameMatch[1]) {
+              const foundName = this.cleanProjectName(nameMatch[1]);
+              if (this.isProjectNameSimilar(projectName, foundName)) {
+                projects.set(foundName, result.project_id || 'unknown');
+              }
+            }
+          }
+        }
+      }
+
+      return Array.from(projects.entries()).map(([name, path]) => ({ name, path }));
+
+    } catch (error) {
+      console.error('[WARN] Failed to search for similar projects:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Check if two project names are similar (fuzzy matching)
+   */
+  private isProjectNameSimilar(name1: string, name2: string): boolean {
+    const clean1 = this.cleanProjectName(name1);
+    const clean2 = this.cleanProjectName(name2);
+
+    // Exact match
+    if (clean1 === clean2) return true;
+
+    // Levenshtein distance-based similarity
+    const distance = this.levenshteinDistance(clean1, clean2);
+    const maxLength = Math.max(clean1.length, clean2.length);
+    const similarity = (maxLength - distance) / maxLength;
+
+    return similarity >= 0.8; // 80% similarity threshold
+  }
+
+  /**
+   * Calculate Levenshtein distance between two strings
+   */
+  private levenshteinDistance(str1: string, str2: string): number {
+    const matrix: number[][] = [];
+
+    for (let i = 0; i <= str2.length; i++) {
+      matrix[i] = [i];
+    }
+
+    for (let j = 0; j <= str1.length; j++) {
+      matrix[0][j] = j;
+    }
+
+    for (let i = 1; i <= str2.length; i++) {
+      for (let j = 1; j <= str1.length; j++) {
+        if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+          matrix[i][j] = matrix[i - 1][j - 1];
+        } else {
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j - 1] + 1, // substitution
+            matrix[i][j - 1] + 1,     // insertion
+            matrix[i - 1][j] + 1      // deletion
+          );
+        }
+      }
+    }
+
+    return matrix[str2.length][str1.length];
+  }
+
+  /**
+   * Generate unique project name when similar projects exist
+   */
+  private async generateUniqueProjectName(baseName: string, projectPath: string, existingProjects: {name: string, path: string}[]): Promise<string> {
+    // Strategy: Append directory-based suffix or incremental number
+
+    // Try appending parent directory name
+    const parentDir = path.basename(path.dirname(projectPath));
+    const parentBasedName = `${baseName}-${this.cleanProjectName(parentDir)}`;
+
+    const isParentNameUnique = !existingProjects.some(p =>
+      this.isProjectNameSimilar(parentBasedName, p.name)
+    );
+
+    if (isParentNameUnique && parentDir !== '.' && parentDir !== projectPath) {
+      return parentBasedName;
+    }
+
+    // Fallback: Append incremental number
+    let counter = 2;
+    let candidateName: string;
+    do {
+      candidateName = `${baseName}-${counter}`;
+      counter++;
+    } while (existingProjects.some(p => this.isProjectNameSimilar(candidateName, p.name)));
+
+    return candidateName;
   }
 }

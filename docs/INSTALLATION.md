@@ -36,7 +36,7 @@ copilot-mcp-server --help
 4. **Test command**: `@copilot /help` (should show MCP tools)
 5. **Initialize project**: `@copilot Initialize this project`
 
-✅ **Success**: Creates `COPILOT.md`, `.github/copilot-instructions.md`, and `.copilot/memory/` directory.
+✅ **Success**: Creates `COPILOT.md`, `.github/copilot-instructions.md`, and initializes project in unified memory database.
 
 ## Platform-Specific Instructions
 
@@ -148,8 +148,8 @@ git --version   # Any recent version
 ## Advanced Configuration
 
 ### Storage Locations
-**Global storage**: `~/.copilot-mcp/`
-**Project storage**: `.copilot/memory/` (per project)
+**Global storage**: `~/.copilot-mcp/` (config, modes, backups)
+**Unified memory**: `~/.copilot-mcp/memory/unified.db` (all project and global memories)
 **VS Code config**: Platform-specific `mcp.json`
 
 ### Custom Installation

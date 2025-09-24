@@ -9,8 +9,8 @@ Technical reference for all MCP tools and capabilities. Start with [Quick Refere
 | Tool | Purpose | Quick Example |
 |------|---------|---------------|
 | `init_project` | Setup project | `@copilot Initialize this project` |
-| `store_memory` | Save information | `@copilot Remember: I prefer TypeScript` |
-| `search_memory` | Find information | `@copilot Search memories for React patterns` |
+| `store_unified_memory` | Save information | `@copilot Remember: I prefer TypeScript` |
+| `search_unified_memory` | Find information | `@copilot Search memories for React patterns` |
 | `get_memory_stats` | View usage | `@copilot Show memory stats` |
 | `create_mode` | New chat mode | `@copilot Create "security" mode` |
 | `heal_chat_mode` | Fix modes | Auto-healing when modes fail |
@@ -35,8 +35,7 @@ Technical reference for all MCP tools and capabilities. Start with [Quick Refere
 **Creates**:
 - `COPILOT.md` - Root project context
 - `.github/copilot-instructions.md` - GitHub Copilot format
-- `.copilot/memory/` - Memory structure
-- `.vscode/mcp.json` - Workspace config
+- **Unified Memory Database**: Initializes project in `~/.copilot-mcp/memory/unified.db`
 
 <details>
 <summary>Full JSON Schema & Examples</summary>
@@ -78,20 +77,22 @@ Technical reference for all MCP tools and capabilities. Start with [Quick Refere
 
 ### Memory Tools
 
-#### store_memory
-**Purpose**: Store information in three-tier memory system
+#### store_unified_memory
+**Purpose**: Store information in unified dual-tier memory database
 
 **Parameters**:
 - `content: string` - What to store (be specific)
-- `layer: 'preference' | 'project' | 'prompt' | 'system'` - Memory layer
+- `tier: 'core' | 'longterm'` - Memory tier (core: 2KB limit, longterm: unlimited)
+- `scope: 'global' | 'project'` - Memory scope (global: cross-project, project: isolated)
+- `project_id?: string` - Required for project-scoped memories
 - `tags?: string[]` - Optional categorization
 - `metadata?: object` - Optional context
 
-**Memory Layers**:
-- `preference` - Global user preferences (shared across ALL projects)
-- `project` - Project-specific context (isolated to current project)
-- `prompt` - Session context (temporary)
-- `system` - Error patterns and solutions (shared across ALL projects)
+**Memory Architecture**:
+- **Core Tier**: High-priority memories (2KB limit per item, always accessible)
+- **Long-term Tier**: Comprehensive storage (unlimited size, detailed information)
+- **Global Scope**: Shared across ALL projects (preferences, patterns, solutions)
+- **Project Scope**: Isolated to specific projects (architecture, project context)
 
 **Usage**: `@copilot Remember: I prefer functional programming patterns`
 
@@ -102,7 +103,9 @@ Technical reference for all MCP tools and capabilities. Start with [Quick Refere
 ```typescript
 {
   content: string,                              // Content to store - be specific and actionable
-  layer: 'preference' | 'project' | 'prompt' | 'system', // Memory layer selection
+  tier: 'core' | 'longterm',                   // Memory tier selection
+  scope: 'global' | 'project',                 // Memory scope selection
+  project_id?: string,                          // Required for project-scoped memories
   tags?: string[],                              // Tags for categorization
   metadata?: Record<string, any>                // Additional context metadata
 }
@@ -114,10 +117,11 @@ Technical reference for all MCP tools and capabilities. Start with [Quick Refere
   "jsonrpc": "2.0",
   "method": "tools/call",
   "params": {
-    "name": "store_memory",
+    "name": "store_unified_memory",
     "arguments": {
       "content": "User prefers functional programming patterns with TypeScript strict mode enabled",
-      "layer": "preference",
+      "tier": "core",
+      "scope": "global",
       "tags": ["typescript", "functional-programming", "preferences"]
     }
   },
@@ -140,14 +144,15 @@ Technical reference for all MCP tools and capabilities. Start with [Quick Refere
 ```
 </details>
 
-#### search_memory
-**Purpose**: Advanced semantic search across all memory layers
+#### search_unified_memory
+**Purpose**: Advanced BM25 + semantic search across unified memory database
 
 **Parameters**:
 - `query: string` - Search query
-- `layer?: string` - Filter by layer (optional)
+- `tier?: 'core' | 'longterm'` - Filter by memory tier (optional)
+- `scope?: 'global' | 'project'` - Filter by memory scope (optional)
+- `project_id?: string` - Search within specific project (optional)
 - `limit?: number` - Max results (default: 10)
-- `context?: object` - Enhanced search context
 
 **Usage**: `@copilot Search memories for TypeScript patterns`
 
@@ -158,14 +163,10 @@ Technical reference for all MCP tools and capabilities. Start with [Quick Refere
 ```typescript
 {
   query: string,                                // Search query - describe what you're looking for
-  layer?: 'preference' | 'project' | 'prompt' | 'system', // Filter by specific layer (optional)
-  limit?: number,                               // Maximum results (default: 10)
-  context?: {                                   // Search context for enhanced relevance
-    currentFile?: string,                       // Currently active file path
-    selectedCode?: string,                      // Currently selected code
-    chatMode?: string,                          // Current chat mode
-    includeSemanticSearch?: boolean             // Use semantic TF-IDF search (default: true)
-  }
+  tier?: 'core' | 'longterm',                  // Filter by memory tier (optional)
+  scope?: 'global' | 'project',                // Filter by memory scope (optional)
+  project_id?: string,                          // Search within specific project (optional)
+  limit?: number                                // Maximum results (default: 10)
 }
 ```
 
@@ -175,7 +176,7 @@ Technical reference for all MCP tools and capabilities. Start with [Quick Refere
   "jsonrpc": "2.0",
   "method": "tools/call",
   "params": {
-    "name": "search_memory",
+    "name": "search_unified_memory",
     "arguments": {
       "query": "typescript functional programming patterns",
       "limit": 5,

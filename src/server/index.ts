@@ -10,17 +10,20 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 
 import { MemoryManager } from '../memory/MemoryManager.js';
+import { UnifiedMemoryManager } from '../memory/UnifiedMemoryManager.js';
+import { MemoryMigration } from '../memory/MemoryMigration.js';
 import { ProjectInitializer } from '../project/ProjectInitializer.js';
 import { ChatModeManager } from '../modes/ChatModeManager.js';
 import { SelfHealingManager } from '../utils/SelfHealingManager.js';
-import { Logger, StoragePaths, MemoryLayer } from '../types/index.js';
+import { Logger, StoragePaths, MemoryLayer, MemoryTier, MemoryScope, UnifiedMemoryStoreSchema } from '../types/index.js';
 import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
 
 interface WorkspaceContext {
   workspacePath: string;
-  memoryManager: MemoryManager;
+  memoryManager: MemoryManager; // Legacy support
+  unifiedMemoryManager: UnifiedMemoryManager; // New unified system
   projectInitializer: ProjectInitializer;
   lastAccessed: Date;
 }
@@ -225,15 +228,17 @@ https://github.com/copilot-mcp/toolset
       return context;
     }
 
-    // Create new workspace context with project-aware memory manager
+    // Create new workspace context with project-aware memory managers
     const context: WorkspaceContext = {
       workspacePath,
-      memoryManager: new MemoryManager(workspacePath), // Pass project path for context-aware storage
+      memoryManager: new MemoryManager(workspacePath), // Legacy support
+      unifiedMemoryManager: new UnifiedMemoryManager(workspacePath), // New unified system
       projectInitializer: new ProjectInitializer(),
       lastAccessed: new Date()
     };
 
     await context.memoryManager.initialize();
+    await context.unifiedMemoryManager.initialize();
 
     this.state.workspaceContexts.set(workspacePath, context);
 
@@ -260,6 +265,7 @@ https://github.com/copilot-mcp/toolset
       const context = this.state.workspaceContexts.get(oldestPath);
       if (context) {
         await context.memoryManager.close();
+        await context.unifiedMemoryManager.close();
         this.state.workspaceContexts.delete(oldestPath);
         console.error(`[INFO] Cleaned up workspace context for: ${oldestPath}`);
       }
@@ -358,6 +364,70 @@ This information is now ${layer === 'preference' || layer === 'system' ? 'availa
       }
     });
 
+    // Register new unified store_memory tool with dual-tier, bifurcated architecture
+    this.server.registerTool("store_unified_memory", {
+      title: "Store Unified Memory",
+      description: "Store information in the new dual-tier, bifurcated memory system. Tiers: 'core' (2KB limit, always accessible) or 'longterm' (unlimited). Scopes: 'global' (cross-project) or 'project' (project-specific).",
+      inputSchema: {
+        content: z.string().min(1).describe('Content to store'),
+        tier: z.enum(['core', 'longterm']).describe('Memory tier: core (2KB limit, high priority) or longterm (unlimited storage)'),
+        scope: z.enum(['global', 'project']).describe('Memory scope: global (cross-project) or project (project-specific)'),
+        project_id: z.string().optional().describe('Required for project-scoped memories'),
+        tags: z.array(z.string()).optional().default([]).describe('Tags for categorization'),
+        metadata: z.record(z.any()).optional().describe('Additional metadata')
+      }
+    }, async ({ content, tier, scope, project_id, tags, metadata }) => {
+      try {
+        const context = this.getCurrentContext();
+        const unifiedManager = context?.unifiedMemoryManager || new UnifiedMemoryManager(this.state.currentWorkspace);
+
+        // Ensure initialized
+        await unifiedManager.initialize();
+
+        const memoryId = await unifiedManager.store(
+          content,
+          tier,
+          scope,
+          project_id || this.state.currentWorkspace,
+          tags || [],
+          metadata
+        );
+
+        const tierDesc = tier === 'core' ? 'Core Memory (2KB limit, high priority)' : 'Long-term Memory (unlimited)';
+        const scopeDesc = scope === 'global' ? 'Available across ALL projects' : 'Available in THIS project only';
+
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Unified Memory stored successfully!
+
+🆔 ID: ${memoryId}
+📊 Tier: ${tier} - ${tierDesc}
+🌍 Scope: ${scope} - ${scopeDesc}
+📁 Project: ${project_id || this.state.currentWorkspace || 'N/A'}
+📝 Content: ${content.substring(0, 100)}${content.length > 100 ? '...' : ''}
+🏷️ Tags: ${tags?.join(', ') || 'none'}
+📏 Size: ${Buffer.byteLength(content, 'utf8')} bytes
+
+This memory is now accessible via search and will be ${tier === 'core' ? 'prioritized in search results' : 'available for long-term storage'}.`
+            }
+          ]
+        };
+      } catch (error) {
+        console.error(`[ERROR] Tool store_unified_memory failed:`, error);
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Error storing unified memory: ${error instanceof Error ? error.message : 'Unknown error'}`
+            }
+          ],
+          isError: true
+        };
+      }
+    });
+
     // Register enhanced search_memory tool with semantic search
     this.server.registerTool("search_memory", {
       title: "Search Memory",
@@ -384,6 +454,85 @@ This information is now ${layer === 'preference' || layer === 'system' ? 'availa
             {
               type: 'text' as const,
               text: `Error executing search_memory: ${error instanceof Error ? error.message : 'Unknown error'}`
+            }
+          ],
+          isError: true
+        };
+      }
+    });
+
+    // Register unified search tool for new dual-tier, bifurcated memory
+    this.server.registerTool("search_unified_memory", {
+      title: "Search Unified Memory",
+      description: "Search the new dual-tier, bifurcated memory system with tier/scope filtering. Core memories are prioritized in results. Use BEFORE implementing new features to find existing patterns and solutions.",
+      inputSchema: {
+        query: z.string().describe('Search query - what are you looking for?'),
+        tier: z.enum(['core', 'longterm']).optional().describe('Filter by tier: core (high priority) or longterm'),
+        scope: z.enum(['global', 'project']).optional().describe('Filter by scope: global (cross-project) or project (current project only)'),
+        project_id: z.string().optional().describe('Filter by specific project ID'),
+        limit: z.number().default(10).describe('Maximum number of results')
+      }
+    }, async ({ query, tier, scope, project_id, limit }) => {
+      try {
+        const context = this.getCurrentContext();
+        const unifiedManager = context?.unifiedMemoryManager || new UnifiedMemoryManager(this.state.currentWorkspace);
+
+        await unifiedManager.initialize();
+
+        const results = await unifiedManager.search(query, {
+          tier,
+          scope,
+          project_id: project_id || (scope === 'project' ? this.state.currentWorkspace : undefined),
+          limit
+        });
+
+        const formattedResults = results.map((result, i) => ({
+          index: i + 1,
+          content: result.memory.content.substring(0, 200) + (result.memory.content.length > 200 ? '...' : ''),
+          tier: result.memory.tier,
+          scope: result.memory.scope,
+          project: result.memory.project_id ? path.basename(result.memory.project_id) : 'N/A',
+          tags: result.memory.tags,
+          relevance: Math.round((result.similarity_score || 0) * 100) / 100,
+          match_type: result.match_type,
+          size: result.memory.content_size,
+          context: result.context
+        }));
+
+        const totalCoreMemories = results.filter(r => r.memory.tier === 'core').length;
+        const totalLongtermMemories = results.filter(r => r.memory.tier === 'longterm').length;
+
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `🔍 Found ${results.length} unified memories matching "${query}":
+
+📊 Results Summary:
+• Core memories (high priority): ${totalCoreMemories}
+• Long-term memories: ${totalLongtermMemories}
+• Search filters: ${tier || 'all tiers'}, ${scope || 'all scopes'}
+
+${formattedResults.map(result => `
+${result.index}. 📋 [${result.tier.toUpperCase()}/${result.scope.toUpperCase()}] (Score: ${result.relevance})
+   🗂️  Project: ${result.project}
+   📝 ${result.content}
+   🏷️  Tags: ${result.tags?.join(', ') || 'none'}
+   📏 Size: ${result.size} bytes
+   🎯 Match: ${result.match_type} | Context: ${result.context}
+`).join('\n')}
+
+💡 TIP: Core memories have higher priority and are always accessible. Use these insights to inform your implementation approach.`
+            }
+          ]
+        };
+      } catch (error) {
+        console.error(`[ERROR] Tool search_unified_memory failed:`, error);
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Error searching unified memory: ${error instanceof Error ? error.message : 'Unknown error'}`
             }
           ],
           isError: true
@@ -585,6 +734,133 @@ Use get_memory_stats to see current memory organization.`
             {
               type: 'text' as const,
               text: `Error optimizing memory: ${error instanceof Error ? error.message : 'Unknown error'}`
+            }
+          ],
+          isError: true
+        };
+      }
+    });
+
+    // Register migration tools for transitioning to unified memory system
+    this.server.registerTool("migrate_memory", {
+      title: "Migrate Memory System",
+      description: "Migrate from legacy memory system to new unified dual-tier, bifurcated architecture. Automatically creates backups before migration.",
+      inputSchema: {
+        force: z.boolean().optional().default(false).describe('Force migration even if unified database exists')
+      }
+    }, async ({ force }) => {
+      try {
+        const migration = new MemoryMigration();
+
+        // Check if migration is needed
+        const needsMigration = await migration.needsMigration();
+        if (!needsMigration && !force) {
+          const status = await migration.getMigrationStatus();
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: `Migration not needed.
+
+Current status:
+• Legacy memories: ${status.legacyCount}
+• Unified memories: ${status.unifiedCount}
+• Migration needed: ${status.needed ? 'Yes' : 'No'}
+
+Recommendations:
+${status.recommendations.map(r => `• ${r}`).join('\n')}
+
+Use force=true to run migration anyway.`
+              }
+            ]
+          };
+        }
+
+        // Run migration
+        console.error('[INFO] Starting memory migration...');
+        const result = await migration.migrate(this.state.currentWorkspace);
+
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: result.success
+                ? `🎉 Memory migration completed successfully!
+
+📊 Migration Results:
+• Migrated: ${result.migratedCount} memories
+• Skipped: ${result.skippedCount} memories
+• Errors: ${result.errorCount} failures
+
+📈 New Memory Distribution:
+• Core memories (high priority): ${result.details.coreMemories}
+• Long-term memories: ${result.details.longtermMemories}
+• Global memories (cross-project): ${result.details.globalMemories}
+• Project memories: ${result.details.projectMemories}
+
+💡 You can now use the new unified memory tools:
+• store_unified_memory - Store with tier/scope control
+• search_unified_memory - Search with enhanced filtering
+
+${result.errors.length > 0 ? `\n⚠️ Warnings:\n${result.errors.slice(0, 3).map(e => `• ${e}`).join('\n')}` : ''}`
+                : `❌ Memory migration failed.
+
+Errors: ${result.errorCount}
+${result.errors.slice(0, 3).map(e => `• ${e}`).join('\n')}
+
+Please check logs and try again.`
+            }
+          ],
+          isError: !result.success
+        };
+      } catch (error) {
+        console.error(`[ERROR] Migration tool failed:`, error);
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Error during migration: ${error instanceof Error ? error.message : 'Unknown error'}`
+            }
+          ],
+          isError: true
+        };
+      }
+    });
+
+    this.server.registerTool("migration_status", {
+      title: "Memory Migration Status",
+      description: "Check the status of memory system migration and get recommendations",
+      inputSchema: {}
+    }, async () => {
+      try {
+        const migration = new MemoryMigration();
+        const status = await migration.getMigrationStatus();
+
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Memory System Migration Status
+
+📊 Current State:
+• Legacy memories: ${status.legacyCount}
+• Unified memories: ${status.unifiedCount}
+• Migration needed: ${status.needed ? '✅ Yes' : '❌ No'}
+
+💡 Recommendations:
+${status.recommendations.map(r => `• ${r}`).join('\n')}
+
+${status.needed ? '\n🚀 Run migrate_memory tool to upgrade to the new unified system.' : '\n✨ System is up to date!'}`
+            }
+          ]
+        };
+      } catch (error) {
+        console.error(`[ERROR] Migration status tool failed:`, error);
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Error checking migration status: ${error instanceof Error ? error.message : 'Unknown error'}`
             }
           ],
           isError: true
@@ -863,7 +1139,8 @@ Always search memory BEFORE implementing new features or making architectural de
         // Close all workspace contexts
         for (const [path, context] of this.state.workspaceContexts.entries()) {
           await context.memoryManager.close();
-          console.error(`[INFO] Closed memory system for workspace: ${path}`);
+          await context.unifiedMemoryManager.close();
+          console.error(`[INFO] Closed memory systems for workspace: ${path}`);
         }
         console.error('[INFO] All memory systems closed successfully');
       } catch (error) {

@@ -49,12 +49,13 @@ This is a **standalone MCP server** for GitHub Copilot that provides intelligent
   - Self-Healing: `heal_chat_mode`, `heal_project_context`, `optimize_memory`
 
 ### Memory System (`src/memory/`)
-- **Three-tier architecture**: Core memory (Map), warm storage (LevelDB), cold storage (SQLite)
-- **Workspace-Aware**: Hybrid isolation with global preferences and workspace-specific memory
-- `MemoryManager.ts` - Main interface for memory operations (workspace-scoped)
-- `BackupManager.ts` - Handles memory persistence and recovery
-- `MemoryAnalytics.ts` - Memory usage statistics and optimization
-- Memory layers: `preference` (global), `project` (workspace), `prompt` (workspace), `system` (global)
+- **Unified Database Architecture**: Single SQLite database with dual-tier, bifurcated memory
+- **Two Memory Tiers**: Core memory (2KB limit, high-priority) + Long-term memory (unlimited)
+- **Bifurcated Scoping**: Global scope (cross-project) + Project scope (project-specific isolation)
+- `UnifiedMemoryManager.ts` - Main unified memory interface with tier/scope management
+- `MemoryMigration.ts` - Migration system from legacy to unified architecture
+- **Database Location**: `~/.copilot-mcp/memory/unified.db` (all memories in one database)
+- **Project Isolation**: Handled via `project_id` column, not separate storage locations
 
 ### Chat Mode System (`src/modes/`)
 - `ChatModeManager.ts` - Dynamic mode creation with dual format support
@@ -68,8 +69,9 @@ This is a **standalone MCP server** for GitHub Copilot that provides intelligent
 - `ProjectInitializer.ts` - Analyzes projects and generates dual context files
 - **GitHub Copilot Native Support**: Creates `.github/copilot-instructions.md` in expected format
 - **Dual Context Generation**: Both `COPILOT.md` (root) and `.github/copilot-instructions.md` (Copilot-specific)
+- **Enhanced Project Detection**: Multi-source name detection with deduplication via database queries
 - Detects 20+ project types (React, Vue, Python, Rust, Go, etc.)
-- Initializes `.copilot/memory/` directory structure
+- **Unified Memory Integration**: Stores project context directly in unified database (no local directories)
 - Generates AI assistant guidelines and project-specific instructions
 
 ### Storage & Utilities (`src/utils/`, `src/storage/`)
@@ -85,11 +87,12 @@ This is a **standalone MCP server** for GitHub Copilot that provides intelligent
 - Resource and prompt providers for context delivery
 - Stdio transport for VS Code integration
 
-### Memory Architecture Pattern (Inspired by Letta/MemGPT)
-- **Core Memory**: Always-active user preferences and context (2KB limit)
-- **Warm Storage**: Recent patterns and project data (LevelDB cache)
-- **Cold Storage**: Long-term knowledge base (SQLite with embeddings)
-- Auto-promotion/demotion based on access patterns
+### Unified Memory Architecture Pattern (Inspired by Letta/MemGPT)
+- **Core Tier**: High-priority, always-accessible memories (2KB limit per item)
+- **Long-term Tier**: Comprehensive storage for detailed information (unlimited size)
+- **Global Scope**: Cross-project shared memories (preferences, patterns, solutions)
+- **Project Scope**: Project-specific isolation via database columns
+- **Single Database**: All memories in `~/.copilot-mcp/memory/unified.db` with tier/scope columns
 
 ### Plugin Architecture
 - Chat modes as configurable plugins with tools and prompts
@@ -117,9 +120,10 @@ This is a **standalone MCP server** for GitHub Copilot that provides intelligent
 - **Features**: Workspace arguments (`--workspace=${workspaceFolder}`)
 
 ### Storage Architecture
-- **Global Storage**: `~/.copilot-mcp/` (server config, global memory, modes, backups)
-- **Workspace Storage**: `.copilot/memory/` (isolated project context and memory)
-- **Generated Files**: `COPILOT.md`, `COPILOT.local.md` (project context files)
+- **Global Storage**: `~/.copilot-mcp/` (server config, unified database, modes, backups)
+- **Unified Memory Database**: `~/.copilot-mcp/memory/unified.db` (all memories with tier/scope columns)
+- **Generated Files**: `COPILOT.md`, `.github/copilot-instructions.md` (project context files)
+- **No Per-Project Storage**: All project memory stored in unified database via `project_id`
 
 ## Testing Architecture
 
