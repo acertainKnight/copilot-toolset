@@ -56,7 +56,7 @@ export class MemoryTools {
     project_id?: string;
     tags?: string[];
     metadata?: Record<string, any>;
-  }, context: ToolExecutionContext) {
+  }) {
     try {
       const memoryId = await this.unifiedMemoryManager.store(
         content,
@@ -122,7 +122,7 @@ The memory is now available for search and retrieval across the system.`
     scope?: 'global' | 'project' | 'both';
     limit?: number;
     project_id?: string;
-  }, context: ToolExecutionContext) {
+  }) {
     try {
       const results = await this.unifiedMemoryManager.search(
         query,
@@ -187,7 +187,7 @@ Legend: ⭐ = Core tier, 📚 = Long-term tier, 🌐 = Global scope, 📁 = Proj
     rateLimit: 5, // 5 calls per second
     inputSchema: {}
   })
-  async getUnifiedMemoryStats(_: {}, context: ToolExecutionContext) {
+  async getUnifiedMemoryStats(_: {}) {
     try {
       const stats = await this.unifiedMemoryManager.getMemoryStats();
 
@@ -197,29 +197,22 @@ Legend: ⭐ = Core tier, 📚 = Long-term tier, 🌐 = Global scope, 📁 = Proj
           text: `📊 **Unified Memory System Statistics**
 
 **Storage Overview:**
-- Total Memories: ${stats.total_memories}
-- Core Tier: ${stats.core_memories} memories (2KB limit each)
-- Long-term Tier: ${stats.longterm_memories} memories (unlimited)
-
-**Scope Distribution:**
-- Global Scope: ${stats.global_memories} memories
-- Project Scope: ${stats.project_memories} memories
-
-**Size Statistics:**
-- Total Storage: ${this.formatBytes(stats.total_size)}
-- Core Tier Size: ${this.formatBytes(stats.core_size)}
-- Long-term Tier Size: ${this.formatBytes(stats.longterm_size)}
-- Average Memory Size: ${this.formatBytes(stats.average_size)}
+- Total Memories: ${stats.totalMemories || 0}
+- Core Memory Size: ${this.formatBytes(stats.core_memory_size)}
+- Warm Storage: ${stats.warm_storage_count} items
+- Cold Storage: ${stats.cold_storage_count} items
 
 **Performance Metrics:**
-- Database Size: ${this.formatBytes(stats.database_size)}
+- Total Access Count: ${stats.total_access_count}
+- Storage Size: ${this.formatBytes(stats.storage_size_bytes)}
 - Last Cleanup: ${stats.last_cleanup ? new Date(stats.last_cleanup).toLocaleString() : 'Never'}
 - System Health: ${this.getSystemHealthStatus(stats)}
 
-**Recent Activity:**
-- Memories Created Today: ${stats.memories_created_today || 0}
-- Most Active Project: ${stats.most_active_project || 'None'}
-- Popular Tags: ${stats.popular_tags?.slice(0, 5).join(', ') || 'None'}`
+**Storage Locations:**
+- Core: ${stats.storage_locations.core}
+- Warm: ${stats.storage_locations.warm}
+- Cold: ${stats.storage_locations.cold}
+- Project: ${stats.storage_locations.project}`
         }]
       };
     } catch (error) {
@@ -260,7 +253,7 @@ Legend: ⭐ = Core tier, 📚 = Long-term tier, 🌐 = Global scope, 📁 = Proj
     layer: MemoryLayer;
     tags?: string[];
     metadata?: Record<string, any>;
-  }, context: ToolExecutionContext) {
+  }) {
     try {
       const memoryId = await this.memoryManager.store(content, layer, tags || [], metadata);
 
@@ -308,7 +301,7 @@ Legend: ⭐ = Core tier, 📚 = Long-term tier, 🌐 = Global scope, 📁 = Proj
   }: {
     memory_id: string;
     cascade_related?: boolean;
-  }, context: ToolExecutionContext) {
+  }) {
     try {
       const result = await this.unifiedMemoryManager.deleteMemory(memory_id, cascade_related || false);
 
@@ -379,7 +372,7 @@ Please check the memory ID and try again.`
     scope?: MemoryScope;
     similarity_threshold?: number;
     project_id?: string;
-  }, context: ToolExecutionContext) {
+  }) {
     try {
       const result = await this.unifiedMemoryManager.checkDuplicateMemory(
         content,
@@ -468,7 +461,7 @@ The content is unique enough to be stored as a new memory.
     memory_id: string;
     target_tier: MemoryTier;
     reason?: string;
-  }, context: ToolExecutionContext) {
+  }) {
     try {
       const result = await this.unifiedMemoryManager.migrateMemoryTier(memory_id, target_tier, reason);
 
@@ -529,7 +522,7 @@ Please check the memory ID and tier constraints.`
     rateLimit: 3,
     inputSchema: {}
   })
-  async getMemoryAnalytics(_: {}, context: ToolExecutionContext) {
+  async getMemoryAnalytics(_: {}) {
     try {
       const analytics = await this.unifiedMemoryManager.getMemoryAnalytics();
 
@@ -749,7 +742,7 @@ ${formattedCategories}
     conversation_text: string;
     context_description?: string;
     auto_store?: boolean;
-  }, context: ToolExecutionContext) {
+  }) {
     try {
       const preferences: string[] = [];
       const text = conversation_text.toLowerCase();
@@ -919,7 +912,7 @@ ${context_description ? `📝 **Context:** ${context_description}` : ''}
     include_preferences?: boolean;
     include_project_patterns?: boolean;
     context_depth?: 'minimal' | 'standard' | 'comprehensive';
-  }, context: ToolExecutionContext) {
+  }) {
     try {
       const contextSections: string[] = [];
       const currentProject = context.workspacePath || 'default';

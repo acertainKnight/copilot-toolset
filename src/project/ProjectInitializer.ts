@@ -1358,18 +1358,18 @@ ${analysis.gitInfo ? `
   /**
    * Generate unique project name when similar projects exist
    */
-  private async generateUniqueProjectName(baseName: string, projectPath: string, existingProjects: {name: string, path: string}[]): Promise<string> {
+  private async generateUniqueProjectName(baseName: string, _projectPath: string, existingProjects: {name: string, path: string}[]): Promise<string> {
     // Strategy: Append directory-based suffix or incremental number
 
     // Try appending parent directory name
-    const parentDir = path.basename(path.dirname(projectPath));
+    const parentDir = path.basename(path.dirname(_projectPath));
     const parentBasedName = `${baseName}-${this.cleanProjectName(parentDir)}`;
 
     const isParentNameUnique = !existingProjects.some(p =>
       this.isProjectNameSimilar(parentBasedName, p.name)
     );
 
-    if (isParentNameUnique && parentDir !== '.' && parentDir !== projectPath) {
+    if (isParentNameUnique && parentDir !== '.' && parentDir !== _projectPath) {
       return parentBasedName;
     }
 
