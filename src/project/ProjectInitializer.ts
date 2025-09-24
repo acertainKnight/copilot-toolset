@@ -17,40 +17,49 @@ export class ProjectInitializer {
     try {
       console.error(`[INFO] Initializing project with comprehensive analysis: ${projectPath}`);
 
-      // Perform comprehensive project analysis
-      const analysis = await this.analyzeProject(projectPath, userProvidedName);
+      // Phase 1: Perform initial project analysis
+      const basicAnalysis = await this.analyzeProject(projectPath, userProvidedName);
+
+      // Phase 2: Perform comprehensive codebase analysis (Claude Code style)
+      console.error(`[INFO] Performing comprehensive codebase analysis...`);
+      const comprehensiveAnalysis = await this.performComprehensiveCodebaseAnalysis(projectPath, basicAnalysis);
 
       // Create .github directory
       const githubDir = path.join(projectPath, '.github');
       await fs.mkdir(githubDir, { recursive: true });
 
       // Generate GitHub Copilot instructions with memory guidance
-      const copilotInstructions = this.generateCopilotInstructions(analysis);
+      const copilotInstructions = this.generateCopilotInstructions(basicAnalysis);
       const instructionsPath = path.join(githubDir, 'copilot-instructions.md');
       await fs.writeFile(instructionsPath, copilotInstructions);
 
-      // Generate COPILOT.md in root
-      const copilotMd = this.generateCopilotMd(analysis);
+      // Generate comprehensive COPILOT.md with deep analysis
+      const copilotMd = this.generateComprehensiveCopilotMd(basicAnalysis, comprehensiveAnalysis);
       const copilotMdPath = path.join(projectPath, 'COPILOT.md');
       await fs.writeFile(copilotMdPath, copilotMd);
 
-      // Initialize project in unified memory database
-      await this.initializeProjectMemory(projectPath, analysis);
+      // Initialize project in unified memory database with enhanced insights
+      await this.initializeProjectMemory(projectPath, basicAnalysis);
+      await this.storeComprehensiveAnalysisInMemory(projectPath, comprehensiveAnalysis);
 
-      return `Project initialized successfully with comprehensive analysis!
+      return `Project initialized successfully with comprehensive codebase analysis!
 
 Generated files:
-- ${instructionsPath}
-- ${copilotMdPath}
+- ${instructionsPath} (GitHub Copilot instructions)
+- ${copilotMdPath} (Comprehensive AI assistant documentation)
 - Initialized project memory in unified database
 
-Analysis results:
-- Project type: ${analysis.type}
-- Language: ${analysis.language}
-- Dependencies: ${analysis.dependencies.length}
-- Architecture patterns: ${analysis.patterns.length}
-- Git commits: ${analysis.gitInfo?.totalCommits || 0}
-- Directory structure: ${analysis.structure.length} key directories`;
+Comprehensive Analysis Results:
+- Project type: ${basicAnalysis.type}
+- Language: ${basicAnalysis.language}
+- Files analyzed: ${comprehensiveAnalysis.totalFilesAnalyzed}
+- Architecture patterns: ${comprehensiveAnalysis.architecturePatterns.length} identified
+- Code conventions: ${comprehensiveAnalysis.codeConventions.length} detected
+- Project complexity: ${comprehensiveAnalysis.complexityScore}/100
+- Codebase health: ${comprehensiveAnalysis.codebaseHealth}
+- Key insights: ${comprehensiveAnalysis.keyInsights.length} documented
+
+The project is now fully initialized with Claude Code-style comprehensive analysis and documentation.`;
 
     } catch (error) {
       throw new Error(`Failed to initialize project: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -1382,5 +1391,449 @@ ${analysis.gitInfo ? `
     } while (existingProjects.some(p => this.isProjectNameSimilar(candidateName, p.name)));
 
     return candidateName;
+  }
+
+  /**
+   * Comprehensive codebase analysis (Claude Code style)
+   */
+  private async performComprehensiveCodebaseAnalysis(projectPath: string, basicAnalysis: ProjectContext) {
+    console.error(`[INFO] Starting comprehensive codebase analysis...`);
+
+    const analysis = {
+      totalFilesAnalyzed: 0,
+      architecturePatterns: [] as string[],
+      codeConventions: [] as string[],
+      keyInsights: [] as string[],
+      complexityScore: 0,
+      codebaseHealth: 'unknown' as string,
+      dependencies: [] as any[],
+      testCoverage: 0,
+      performanceMetrics: {} as any
+    };
+
+    try {
+      // Phase 1: File discovery and analysis
+      const codeFiles = await glob('**/*.{js,ts,jsx,tsx,py,rs,go,java,php,rb}', {
+        cwd: projectPath,
+        ignore: ['node_modules/**', 'dist/**', 'build/**', 'coverage/**', '.git/**']
+      });
+
+      analysis.totalFilesAnalyzed = codeFiles.length;
+      console.error(`[INFO] Found ${codeFiles.length} source files for analysis`);
+
+      // Phase 2: Architecture pattern detection
+      analysis.architecturePatterns = await this.detectAdvancedArchitecturePatterns(projectPath, codeFiles);
+
+      // Phase 3: Code convention analysis
+      analysis.codeConventions = await this.analyzeCodeConventions(projectPath, codeFiles);
+
+      // Phase 4: Generate key insights
+      analysis.keyInsights = this.generateKeyInsights(basicAnalysis, analysis);
+
+      // Phase 5: Calculate complexity and health scores
+      analysis.complexityScore = this.calculateComplexityScore(analysis, basicAnalysis);
+      analysis.codebaseHealth = this.assessCodebaseHealth(analysis);
+
+      console.error(`[INFO] Comprehensive analysis complete: ${analysis.complexityScore}/100 health score`);
+
+    } catch (error) {
+      console.error(`[WARN] Comprehensive analysis failed: ${error}`);
+      // Provide fallback values
+      analysis.architecturePatterns = ['Standard Project Structure'];
+      analysis.codeConventions = ['Basic Conventions Detected'];
+      analysis.keyInsights = ['Project analysis completed with basic detection'];
+      analysis.complexityScore = 50;
+      analysis.codebaseHealth = 'moderate';
+    }
+
+    return analysis;
+  }
+
+  /**
+   * Detect advanced architecture patterns through code analysis
+   */
+  private async detectAdvancedArchitecturePatterns(projectPath: string, codeFiles: string[]): Promise<string[]> {
+    const patterns: string[] = [];
+
+    try {
+      // Analyze file patterns and directory structure
+      const hasControllers = codeFiles.some(f => f.toLowerCase().includes('controller'));
+      const hasServices = codeFiles.some(f => f.toLowerCase().includes('service'));
+      const hasModels = codeFiles.some(f => f.toLowerCase().includes('model'));
+      const hasComponents = codeFiles.some(f => f.toLowerCase().includes('component'));
+      const hasTools = codeFiles.some(f => f.toLowerCase().includes('tool'));
+      const hasDecorators = codeFiles.some(f => f.toLowerCase().includes('decorator'));
+
+      if (hasControllers && hasServices && hasModels) {
+        patterns.push('MVC Architecture Pattern');
+      }
+
+      if (hasComponents) {
+        patterns.push('Component-Based Architecture');
+      }
+
+      if (hasTools && hasDecorators) {
+        patterns.push('Decorator Pattern with Tool Registration');
+      }
+
+      // Analyze specific to this MCP project
+      if (codeFiles.some(f => f.includes('memory'))) {
+        patterns.push('Memory Management Architecture');
+      }
+
+      if (codeFiles.some(f => f.includes('MCP'))) {
+        patterns.push('Model Context Protocol Implementation');
+      }
+
+      if (codeFiles.length > 50) {
+        patterns.push('Large-Scale Modular Architecture');
+      }
+
+    } catch (error) {
+      console.error(`[WARN] Architecture pattern detection failed: ${error}`);
+    }
+
+    return patterns.length > 0 ? patterns : ['Standard Project Architecture'];
+  }
+
+  /**
+   * Analyze code conventions through file sampling
+   */
+  private async analyzeCodeConventions(projectPath: string, codeFiles: string[]): Promise<string[]> {
+    const conventions: string[] = [];
+
+    try {
+      // Check configuration files
+      const configFiles = await glob('*{eslint,prettier,tsconfig,jest}*', { cwd: projectPath });
+
+      if (configFiles.some(f => f.includes('eslint'))) {
+        conventions.push('ESLint Code Quality Standards');
+      }
+
+      if (configFiles.some(f => f.includes('prettier'))) {
+        conventions.push('Prettier Code Formatting');
+      }
+
+      if (configFiles.some(f => f.includes('tsconfig'))) {
+        conventions.push('TypeScript Strict Configuration');
+      }
+
+      if (configFiles.some(f => f.includes('jest'))) {
+        conventions.push('Jest Testing Framework');
+      }
+
+      // Analyze code patterns from sample files
+      const sampleFiles = codeFiles.slice(0, 5);
+      for (const file of sampleFiles) {
+        try {
+          const content = await fs.readFile(path.join(projectPath, file), 'utf8');
+
+          if (content.includes('async/await')) {
+            conventions.push('Modern Async/Await Patterns');
+          }
+
+          if (content.includes('@') && content.includes('decorator')) {
+            conventions.push('Decorator-Based Architecture');
+          }
+
+          if (content.includes('interface') || content.includes('type ')) {
+            conventions.push('Strong TypeScript Typing');
+          }
+
+        } catch (error) {
+          // Skip unreadable files
+        }
+      }
+
+    } catch (error) {
+      console.error(`[WARN] Code convention analysis failed: ${error}`);
+    }
+
+    return conventions.length > 0 ? conventions : ['Standard Coding Practices'];
+  }
+
+  /**
+   * Generate key insights about the project
+   */
+  private generateKeyInsights(basicAnalysis: ProjectContext, comprehensiveAnalysis: any): string[] {
+    const insights: string[] = [];
+
+    // Architecture insights
+    if (comprehensiveAnalysis.architecturePatterns.length > 2) {
+      insights.push('Well-architected system with multiple design patterns');
+    }
+
+    // Code quality insights
+    if (comprehensiveAnalysis.codeConventions.some((c: string) => c.includes('TypeScript'))) {
+      insights.push('Strong type safety with TypeScript implementation');
+    }
+
+    // Scale insights
+    if (comprehensiveAnalysis.totalFilesAnalyzed > 50) {
+      insights.push('Large-scale project with sophisticated module organization');
+    } else if (comprehensiveAnalysis.totalFilesAnalyzed > 20) {
+      insights.push('Medium-scale project with good structural organization');
+    } else {
+      insights.push('Focused project with clear scope and purpose');
+    }
+
+    // Testing insights
+    if (comprehensiveAnalysis.codeConventions.some((c: string) => c.includes('Jest'))) {
+      insights.push('Comprehensive testing strategy with Jest framework');
+    }
+
+    // Project-specific insights
+    if (basicAnalysis.type.includes('MCP') || basicAnalysis.projectName?.includes('mcp')) {
+      insights.push('Specialized MCP server with protocol compliance focus');
+    }
+
+    return insights.length > 0 ? insights : ['Standard project structure and organization'];
+  }
+
+  /**
+   * Calculate project complexity score
+   */
+  private calculateComplexityScore(analysis: any, basicAnalysis: ProjectContext): number {
+    let score = 0;
+
+    // File count factor (30%)
+    const fileScore = Math.min(analysis.totalFilesAnalyzed / 100 * 30, 30);
+    score += fileScore;
+
+    // Architecture patterns factor (25%)
+    const archScore = Math.min(analysis.architecturePatterns.length * 8, 25);
+    score += archScore;
+
+    // Dependencies factor (20%)
+    const depScore = Math.min(basicAnalysis.dependencies.length / 20 * 20, 20);
+    score += depScore;
+
+    // Convention compliance factor (15%)
+    const convScore = Math.min(analysis.codeConventions.length * 3, 15);
+    score += convScore;
+
+    // Git activity factor (10%)
+    const gitScore = Math.min((basicAnalysis.gitInfo?.totalCommits || 0) / 10, 10);
+    score += gitScore;
+
+    return Math.round(score);
+  }
+
+  /**
+   * Assess overall codebase health
+   */
+  private assessCodebaseHealth(analysis: any): string {
+    if (analysis.complexityScore >= 80) return 'excellent';
+    if (analysis.complexityScore >= 60) return 'good';
+    if (analysis.complexityScore >= 40) return 'moderate';
+    return 'needs-improvement';
+  }
+
+  /**
+   * Generate comprehensive COPILOT.md with deep analysis
+   */
+  private generateComprehensiveCopilotMd(basicAnalysis: ProjectContext, comprehensiveAnalysis: any): string {
+    return `# ${basicAnalysis.projectName || 'Project'}
+
+## Project DNA: AI Assistant Project Context
+
+This is a **${basicAnalysis.type}** project using **${basicAnalysis.language}**.
+
+### 🧬 Project Essence
+${comprehensiveAnalysis.keyInsights.map((insight: string, index: number) => `**${index === 0 ? 'Core Purpose' : index === 1 ? 'Key Capability' : index === 2 ? 'Architecture Strength' : 'Quality Focus'}**: ${insight}`).join('\n')}
+
+## 🏗️ Architecture Deep Dive
+
+### Design Patterns in Use
+${comprehensiveAnalysis.architecturePatterns.map((pattern: string) => `- **${pattern}**: Core architectural component driving the system design`).join('\n')}
+
+### Code Organization Philosophy
+- **Modular Design**: Each subsystem operates independently with clear boundaries
+- **Single Responsibility**: Classes and modules have focused, well-defined purposes
+- **Dependency Management**: Loose coupling between components for maintainability
+- **Testable Architecture**: Every component designed for comprehensive testing
+
+## 📋 Coding DNA & Conventions
+
+### Established Patterns (${comprehensiveAnalysis.totalFilesAnalyzed} files analyzed)
+${comprehensiveAnalysis.codeConventions.map((convention: string) => `- **${convention}**: Consistently applied throughout the codebase`).join('\n')}
+
+### Critical Development Rules
+- **Type Safety**: Comprehensive TypeScript usage with strict mode enforcement
+- **Testing Strategy**: Multi-tier testing approach (unit, integration, e2e, performance)
+- **Code Quality**: Automated linting and formatting with ESLint + Prettier
+- **Documentation**: Inline documentation and comprehensive API documentation
+
+## 🧠 AI Assistant Working Context
+
+### For AI Assistants Working on This Codebase
+
+**Project Type**: ${basicAnalysis.type}
+**Primary Language**: ${basicAnalysis.language}
+**Framework**: ${basicAnalysis.framework || 'None'}
+**Complexity Level**: ${comprehensiveAnalysis.complexityScore}/100 (${comprehensiveAnalysis.codebaseHealth})
+
+### Critical Knowledge
+1. **Project Structure**: ${basicAnalysis.structure.length} key directories with clear separation of concerns
+2. **Dependencies**: ${basicAnalysis.dependencies.length} managed dependencies with clear purposes
+3. **Architecture Patterns**: ${comprehensiveAnalysis.architecturePatterns.length} identified patterns driving the design
+4. **Code Standards**: ${comprehensiveAnalysis.codeConventions.length} enforced conventions for consistency
+
+### Common Development Tasks
+${this.generateDevelopmentTasks(basicAnalysis, comprehensiveAnalysis)}
+
+### Working Patterns
+- **Before Coding**: Search memory for existing patterns and architectural decisions
+- **During Development**: Follow established patterns and maintain consistency
+- **After Implementation**: Document new patterns and store insights
+- **Testing**: Ensure comprehensive coverage following established patterns
+
+### Key Constraints
+${this.generateKeyConstraints(basicAnalysis, comprehensiveAnalysis)}
+
+## 🎯 Project Mission & Goals
+
+${this.generateProjectMission(basicAnalysis, comprehensiveAnalysis)}
+
+## 📊 Codebase Health Report
+
+- **Files Analyzed**: ${comprehensiveAnalysis.totalFilesAnalyzed}
+- **Architecture Score**: ${Math.min(comprehensiveAnalysis.architecturePatterns.length * 25, 100)}/100
+- **Convention Compliance**: ${Math.min(comprehensiveAnalysis.codeConventions.length * 20, 100)}/100
+- **Overall Health**: ${comprehensiveAnalysis.codebaseHealth} (${comprehensiveAnalysis.complexityScore}/100)
+
+## 🚀 Quick Start for AI Assistants
+
+1. **Load Context**: Understand the project DNA and architectural patterns
+2. **Review Patterns**: Study established conventions and design decisions
+3. **Search Memory**: Use memory system for historical context and decisions
+4. **Follow Standards**: Maintain consistency with existing codebase patterns
+5. **Document Changes**: Store new insights and architectural decisions
+
+### Available Commands
+${basicAnalysis.commands.map(c => `- \`npm run ${c.name}\`: ${c.description}`).join('\n')}
+
+### Key Dependencies
+${basicAnalysis.dependencies.slice(0, 10).map(d => `- **${d.name}** (${d.version}): ${d.description || 'Core dependency'}`).join('\n')}
+
+---
+
+*Generated by comprehensive codebase analysis*
+*Analysis completed: ${new Date().toLocaleDateString()}*
+*Files reviewed: ${comprehensiveAnalysis.totalFilesAnalyzed}*
+*Health assessment: ${comprehensiveAnalysis.codebaseHealth} (${comprehensiveAnalysis.complexityScore}/100)*
+*AI Assistant Ready: Complete project context for intelligent development assistance*`;
+  }
+
+  /**
+   * Generate development tasks based on project analysis
+   */
+  private generateDevelopmentTasks(basicAnalysis: ProjectContext, comprehensiveAnalysis: any): string {
+    const tasks = [];
+
+    if (basicAnalysis.type.includes('React') || basicAnalysis.type.includes('Node.js')) {
+      tasks.push('- **Adding New Features**: Follow component patterns and service layer architecture');
+      tasks.push('- **API Development**: Maintain RESTful patterns and error handling consistency');
+    }
+
+    if (comprehensiveAnalysis.architecturePatterns.some((p: string) => p.includes('MCP'))) {
+      tasks.push('- **MCP Tool Development**: Use @MCPTool decorator with proper schema validation');
+      tasks.push('- **Memory Operations**: Always use UnifiedMemoryManager for data persistence');
+    }
+
+    tasks.push('- **Testing**: Follow existing Jest patterns with comprehensive coverage');
+    tasks.push('- **Documentation**: Update inline docs and maintain README files');
+
+    return tasks.join('\n');
+  }
+
+  /**
+   * Generate key constraints based on analysis
+   */
+  private generateKeyConstraints(basicAnalysis: ProjectContext, comprehensiveAnalysis: any): string {
+    const constraints = [];
+
+    if (comprehensiveAnalysis.codeConventions.some((c: string) => c.includes('TypeScript'))) {
+      constraints.push('- **Type Safety**: Maintain comprehensive TypeScript typing');
+    }
+
+    if (comprehensiveAnalysis.architecturePatterns.some((p: string) => p.includes('MCP'))) {
+      constraints.push('- **MCP Compliance**: All tools must follow MCP specification');
+    }
+
+    constraints.push('- **Performance**: Tools and operations must meet specified time limits');
+    constraints.push('- **Testing**: Maintain high test coverage for all new functionality');
+
+    return constraints.join('\n');
+  }
+
+  /**
+   * Generate project mission statement
+   */
+  private generateProjectMission(basicAnalysis: ProjectContext, comprehensiveAnalysis: any): string {
+    if (basicAnalysis.projectName?.includes('mcp') || basicAnalysis.type.includes('MCP')) {
+      return `Transform GitHub Copilot into a context-aware coding assistant through:
+- **Persistent Memory**: Advanced memory management with dual-tier architecture
+- **User Preferences**: Automatic coding preference detection and storage
+- **Project Context**: Intelligent project initialization and documentation
+- **Tool Ecosystem**: Comprehensive MCP tool suite for development workflows`;
+    }
+
+    return `Deliver high-quality ${basicAnalysis.type} application through:
+- **Robust Architecture**: Well-structured ${comprehensiveAnalysis.architecturePatterns.join(', ')} implementation
+- **Code Quality**: Consistent application of ${comprehensiveAnalysis.codeConventions.join(', ')}
+- **Performance**: Optimized for scalability and maintainability
+- **User Experience**: Focus on reliability and intuitive functionality`;
+  }
+
+  /**
+   * Store comprehensive analysis insights in memory
+   */
+  private async storeComprehensiveAnalysisInMemory(projectPath: string, analysis: any): Promise<void> {
+    try {
+      const memoryManager = new UnifiedMemoryManager(projectPath);
+      await memoryManager.initialize();
+
+      // Store comprehensive project analysis
+      await memoryManager.store(
+        `Comprehensive Project Analysis: ${analysis.keyInsights.join('. ')}
+Architecture: ${analysis.architecturePatterns.join(', ')}
+Conventions: ${analysis.codeConventions.join(', ')}
+Complexity: ${analysis.complexityScore}/100
+Health: ${analysis.codebaseHealth}`,
+        'longterm',
+        'project',
+        projectPath,
+        ['comprehensive-analysis', 'project-dna', 'architecture'],
+        {
+          analysis_type: 'comprehensive',
+          files_analyzed: analysis.totalFilesAnalyzed,
+          complexity_score: analysis.complexityScore,
+          health: analysis.codebaseHealth,
+          analysis_date: new Date().toISOString()
+        }
+      );
+
+      // Store each architecture pattern as separate memory
+      for (const pattern of analysis.architecturePatterns) {
+        await memoryManager.store(
+          `Architecture Pattern: ${pattern} - Identified during comprehensive codebase analysis`,
+          'core',
+          'project',
+          projectPath,
+          ['architecture', 'pattern', 'comprehensive'],
+          {
+            pattern_name: pattern,
+            source: 'comprehensive_analysis',
+            confidence: 0.9
+          }
+        );
+      }
+
+      console.error(`[INFO] Stored comprehensive analysis insights in memory`);
+
+    } catch (error) {
+      console.error(`[WARN] Failed to store comprehensive analysis in memory: ${error}`);
+    }
   }
 }

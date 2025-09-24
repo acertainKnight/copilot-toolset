@@ -1219,6 +1219,7 @@ This instruction will now ALWAYS be followed by GitHub Copilot in this project.`
     }
   }
 
+
   /**
    * Helper methods
    */
