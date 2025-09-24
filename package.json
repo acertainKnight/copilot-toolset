@@ -1,16 +1,16 @@
 {
-  "name": "copilot-mcp-toolset",
+  "name": "gitcopilot-memory",
   "version": "1.0.0",
   "type": "module",
-  "description": "A standalone MCP server for GitHub Copilot with automatic project initialization, custom chat modes, and persistent multilevel memory",
-  "main": "dist/server/index.js",
+  "description": "GitHub Copilot MCP server with memory management, automatic tool registration, and intelligent project initialization",
+  "main": "dist/server/MCPServer.js",
   "bin": {
-    "copilot-mcp-server": "./dist/server/index.js"
+    "gitcopilot-memory": "./dist/server/MCPServer.js"
   },
   "scripts": {
-    "build": "tsc && shx chmod +x dist/server/index.js && echo '{\"type\": \"module\"}' > dist/package.json",
+    "build": "tsc && shx chmod +x dist/server/MCPServer.js && echo '{\"type\": \"module\"}' > dist/package.json",
     "dev": "tsc --watch",
-    "start": "node dist/server/index.js",
+    "start": "node dist/server/MCPServer.js",
     "test": "npm run test:unit",
     "test:unit": "jest --config jest.unit.config.js",
     "test:unit:watch": "jest --config jest.unit.config.js --watch",
