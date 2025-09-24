@@ -5,6 +5,8 @@
  * Based on GitHub Copilot and VS Code MCP documentation
  */
 
+import * as fs from 'fs/promises';
+import * as path from 'path';
 import { z } from 'zod';
 import { MCPTool, TOOL_CATEGORIES, TOOL_PERMISSIONS } from '../server/MCPToolDecorator.js';
 import { MemoryManager } from '../memory/MemoryManager.js';
@@ -1032,10 +1034,236 @@ ${guidanceSection}
   }
 
   /**
+   * Memorize permanent instructions for the agent
+   * This modifies the copilot instructions file to add ALWAYS-remembered patterns
+   */
+  @MCPTool({
+    name: 'memorize',
+    title: 'Memorize Permanent Instructions',
+    description: 'Add permanent instructions to copilot instructions that the agent must ALWAYS remember and follow',
+    category: TOOL_CATEGORIES.PROJECT,
+    permissions: [TOOL_PERMISSIONS.WRITE_FILES],
+    rateLimit: 3, // 3 calls per second - limited for safety
+    inputSchema: {
+      instruction: z.string().min(1).describe('The permanent instruction/pattern the agent should ALWAYS remember'),
+      category: z.enum(['coding-rules', 'architecture-patterns', 'never-do', 'always-do', 'project-specific', 'general']).describe('Category of the instruction'),
+      priority: z.enum(['high', 'medium', 'low']).optional().default('medium').describe('Priority level (high instructions are shown more prominently)')
+    }
+  })
+  async memorize({
+    instruction,
+    category,
+    priority
+  }: {
+    instruction: string;
+    category: 'coding-rules' | 'architecture-patterns' | 'never-do' | 'always-do' | 'project-specific' | 'general';
+    priority?: 'high' | 'medium' | 'low';
+  }) {
+    try {
+      const projectRoot = process.cwd();
+      const copilotInstructionsPath = path.join(projectRoot, '.github', 'copilot-instructions.md');
+      const copilotMdPath = path.join(projectRoot, 'COPILOT.md');
+
+      // Check if instruction files exist
+      const instructionsExist = await fs.access(copilotInstructionsPath).then(() => true).catch(() => false);
+      const copilotMdExists = await fs.access(copilotMdPath).then(() => true).catch(() => false);
+
+      if (!instructionsExist && !copilotMdExists) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `❌ **Memorization Failed**
+
+No copilot instruction files found in this project.
+
+Please run \`init_project\` first to create the instruction files, then use the memorize tool.`
+          }],
+          isError: true
+        };
+      }
+
+      // Create the memorization entry with metadata
+      const timestamp = new Date().toISOString();
+      const priorityIcon = priority === 'high' ? '🔴' : priority === 'medium' ? '🟡' : '🟢';
+      const categoryIcon = this.getCategoryIcon(category);
+
+      const memorizedEntry = `
+## ${priorityIcon} ${categoryIcon} MEMORIZED: ${this.formatCategoryName(category)}
+
+**Added**: ${new Date().toLocaleDateString()}
+**Priority**: ${priority?.toUpperCase()}
+
+${instruction}
+
+---
+`;
+
+      let filesUpdated = 0;
+      const results: string[] = [];
+
+      // Update .github/copilot-instructions.md
+      if (instructionsExist) {
+        const instructionsContent = await fs.readFile(copilotInstructionsPath, 'utf8');
+
+        // Find the memorized instructions section or create it
+        let updatedContent;
+        if (instructionsContent.includes('# 🧠 MEMORIZED INSTRUCTIONS')) {
+          // Add to existing section
+          const memorizedSectionIndex = instructionsContent.indexOf('# 🧠 MEMORIZED INSTRUCTIONS');
+          const nextSectionIndex = instructionsContent.indexOf('\n#', memorizedSectionIndex + 1);
+
+          if (nextSectionIndex === -1) {
+            // Add to end of memorized section
+            updatedContent = instructionsContent + memorizedEntry;
+          } else {
+            // Insert before next section
+            updatedContent = instructionsContent.slice(0, nextSectionIndex) +
+                             memorizedEntry +
+                             instructionsContent.slice(nextSectionIndex);
+          }
+        } else {
+          // Create new memorized section after the main protocol
+          const protocolEndIndex = instructionsContent.indexOf('## Memory System Usage for GitHub Copilot');
+          if (protocolEndIndex !== -1) {
+            const insertionPoint = instructionsContent.indexOf('\n## ', protocolEndIndex + 1);
+            const memorizedSection = `
+# 🧠 MEMORIZED INSTRUCTIONS
+
+**These are PERMANENT instructions that must ALWAYS be followed:**
+${memorizedEntry}
+`;
+            if (insertionPoint !== -1) {
+              updatedContent = instructionsContent.slice(0, insertionPoint) +
+                               memorizedSection +
+                               instructionsContent.slice(insertionPoint);
+            } else {
+              updatedContent = instructionsContent + memorizedSection;
+            }
+          } else {
+            // Fallback: add at the end
+            updatedContent = instructionsContent + `
+# 🧠 MEMORIZED INSTRUCTIONS
+
+**These are PERMANENT instructions that must ALWAYS be followed:**
+${memorizedEntry}
+`;
+          }
+        }
+
+        await fs.writeFile(copilotInstructionsPath, updatedContent);
+        filesUpdated++;
+        results.push('✅ Updated .github/copilot-instructions.md');
+      }
+
+      // Update COPILOT.md
+      if (copilotMdExists) {
+        const copilotContent = await fs.readFile(copilotMdPath, 'utf8');
+
+        let updatedContent;
+        if (copilotContent.includes('# 🧠 MEMORIZED INSTRUCTIONS')) {
+          // Add to existing section
+          const memorizedSectionIndex = copilotContent.indexOf('# 🧠 MEMORIZED INSTRUCTIONS');
+          const nextSectionIndex = copilotContent.indexOf('\n#', memorizedSectionIndex + 1);
+
+          if (nextSectionIndex === -1) {
+            updatedContent = copilotContent + memorizedEntry;
+          } else {
+            updatedContent = copilotContent.slice(0, nextSectionIndex) +
+                             memorizedEntry +
+                             copilotContent.slice(nextSectionIndex);
+          }
+        } else {
+          // Create new memorized section
+          const memorizedSection = `
+# 🧠 MEMORIZED INSTRUCTIONS
+
+**These are PERMANENT instructions that must ALWAYS be followed:**
+${memorizedEntry}
+`;
+          updatedContent = copilotContent + memorizedSection;
+        }
+
+        await fs.writeFile(copilotMdPath, updatedContent);
+        filesUpdated++;
+        results.push('✅ Updated COPILOT.md');
+      }
+
+      // Also store in core memory for immediate access
+      await this.unifiedMemoryManager.store(
+        `MEMORIZED ${category.toUpperCase()}: ${instruction}`,
+        'core',
+        'project',
+        projectRoot,
+        ['memorized', category, priority || 'medium'],
+        {
+          memorized: true,
+          category,
+          priority: priority || 'medium',
+          timestamp,
+          permanent: true
+        }
+      );
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `🧠 **Instruction Memorized Successfully!**
+
+**Instruction**: ${instruction}
+**Category**: ${this.formatCategoryName(category)}
+**Priority**: ${priority?.toUpperCase()} ${priorityIcon}
+
+**Files Updated** (${filesUpdated}):
+${results.join('\n')}
+
+✅ **Stored in core memory** for immediate access
+✅ **Added to copilot instructions** for permanent retention
+
+This instruction will now ALWAYS be followed by the agent in this project.`
+        }]
+      };
+
+    } catch (error) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Failed to memorize instruction: ${error instanceof Error ? error.message : 'Unknown error'}`
+        }],
+        isError: true
+      };
+    }
+  }
+
+  /**
    * Helper methods
    */
   private getCategoryIcon(category: string): string {
     const icons: Record<string, string> = {
+      'coding-rules': '📝',
+      'architecture-patterns': '🏗️',
+      'never-do': '🚫',
+      'always-do': '✅',
+      'project-specific': '📁',
+      'general': '💡'
+    };
+    return icons[category] || '💡';
+  }
+
+  private formatCategoryName(category: string): string {
+    const names: Record<string, string> = {
+      'coding-rules': 'Coding Rules',
+      'architecture-patterns': 'Architecture Patterns',
+      'never-do': 'Never Do This',
+      'always-do': 'Always Do This',
+      'project-specific': 'Project-Specific Rules',
+      'general': 'General Instructions'
+    };
+    return names[category] || category;
+  }
+
+
+  private getCategoryDescriptor(categoryName: string): string {
+    const descriptors: Record<string, string> = {
       'Coding Style & Patterns': '🎨',
       'Languages & Frameworks': '⚡',
       'Testing Approach': '🧪',
@@ -1044,7 +1272,7 @@ ${guidanceSection}
       'Tools & Libraries': '🔧',
       'General Preferences': '⚙️'
     };
-    return icons[category] || '📋';
+    return descriptors[categoryName] || '📋';
   }
 
   private generateContextGuidance(taskDescription: string, totalMemories: number, depth: string): string {
