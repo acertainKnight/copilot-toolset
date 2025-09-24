@@ -412,60 +412,60 @@ Analysis results:
       await memoryManager.initialize();
 
       // Store initial project context in core tier, project scope
-      await memoryManager.storeMemory({
-        content: `Project: ${analysis.projectName || path.basename(projectPath)}
+      await memoryManager.store(
+        `Project: ${analysis.projectName || path.basename(projectPath)}
 Type: ${analysis.type}
 Language: ${analysis.language}
 Framework: ${analysis.framework || 'None'}
 Architecture patterns: ${analysis.patterns.map(p => p.name).join(', ')}
 Key dependencies: ${analysis.dependencies.slice(0, 5).map(d => d.name).join(', ')}`,
-        tier: 'core',
-        scope: 'project',
-        project_id: projectPath,
-        tags: ['project-context', 'initialization', analysis.type.toLowerCase()],
-        metadata: {
+        'core',
+        'project',
+        projectPath,
+        ['project-context', 'initialization', analysis.type.toLowerCase()],
+        {
           initialized_at: new Date().toISOString(),
           project_type: analysis.type,
           language: analysis.language,
           framework: analysis.framework
         }
-      });
+      );
 
       // Store architectural patterns in long-term memory
       for (const pattern of analysis.patterns.slice(0, 3)) { // Limit to top 3 patterns
-        await memoryManager.storeMemory({
-          content: `Architecture Pattern: ${pattern.name}
+        await memoryManager.store(
+          `Architecture Pattern: ${pattern.name}
 Description: ${pattern.description}
 Confidence: ${Math.round(pattern.confidence * 100)}%
 Files: ${pattern.files.slice(0, 3).join(', ')}`,
-          tier: 'longterm',
-          scope: 'project',
-          project_id: projectPath,
-          tags: ['architecture', 'pattern', pattern.type],
-          metadata: {
+          'longterm',
+          'project',
+          projectPath,
+          ['architecture', 'pattern', pattern.type],
+          {
             pattern_name: pattern.name,
             confidence: pattern.confidence,
             pattern_type: pattern.type
           }
-        });
+        );
       }
 
       // Store coding conventions
       for (const convention of analysis.conventions.slice(0, 5)) {
-        await memoryManager.storeMemory({
-          content: `Coding Convention: ${convention.rule}
+        await memoryManager.store(
+          `Coding Convention: ${convention.rule}
 Category: ${convention.category}
 Source: ${convention.source}
 ${convention.example ? `Example: ${convention.example}` : ''}`,
-          tier: 'longterm',
-          scope: 'project',
-          project_id: projectPath,
-          tags: ['convention', 'coding-style', convention.category],
-          metadata: {
+          'longterm',
+          'project',
+          projectPath,
+          ['convention', 'coding-style', convention.category],
+          {
             category: convention.category,
             source: convention.source
           }
-        });
+        );
       }
 
       console.error(`[INFO] Initialized project memory for: ${analysis.projectName || path.basename(projectPath)}`);
@@ -974,20 +974,22 @@ ${analysis.gitInfo ? `
       await memoryManager.initialize();
 
       // Search for project-scoped memories to find existing projects
-      const searchResults = await memoryManager.searchMemories({
-        query: `project:${projectName}`,
-        tier: 'core',
-        scope: 'project',
-        limit: 50
-      });
+      const searchResults = await memoryManager.search(
+        `project:${projectName}`,
+        {
+          tier: 'core',
+          scope: 'project',
+          limit: 50
+        }
+      );
 
       // Extract unique project names and paths from search results
       const projects = new Map<string, string>();
 
       for (const result of searchResults) {
-        if (result.project_id && result.project_id !== currentPath) {
+        if (result.memory.project_id && result.memory.project_id !== currentPath) {
           // Try to extract project name from project_id or content
-          const projectPath = result.project_id;
+          const projectPath = result.memory.project_id;
           const detectedName = path.basename(projectPath);
 
           // Check if this project name is similar to our target
@@ -998,21 +1000,23 @@ ${analysis.gitInfo ? `
       }
 
       // Also search memory content for project references
-      const contentSearch = await memoryManager.searchMemories({
-        query: projectName,
-        limit: 20
-      });
+      const contentSearch = await memoryManager.search(
+        projectName,
+        {
+          limit: 20
+        }
+      );
 
       for (const result of contentSearch) {
         // Look for project references in content
-        const projectMatches = result.content.match(/project[:\s]+"?([^"\s,]+)"?/gi);
+        const projectMatches = result.memory.content.match(/project[:\s]+"?([^"\s,]+)"?/gi);
         if (projectMatches) {
           for (const match of projectMatches) {
             const nameMatch = match.match(/project[:\s]+"?([^"\s,]+)"?/i);
             if (nameMatch && nameMatch[1]) {
               const foundName = this.cleanProjectName(nameMatch[1]);
               if (this.isProjectNameSimilar(projectName, foundName)) {
-                projects.set(foundName, result.project_id || 'unknown');
+                projects.set(foundName, result.memory.project_id || 'unknown');
               }
             }
           }

@@ -114,15 +114,15 @@ else
     echo "⚠️ MCP server test failed - this might be normal if no tools are registered yet"
 fi
 
-# Detect VS Code settings path
+# Detect VS Code Server settings path (correct for MCP configuration)
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    VSCODE_CONFIG_PATH="$HOME/.config/Code/User"
+    VSCODE_CONFIG_PATH="$HOME/.vscode-server/data/User"
 elif [[ "$OSTYPE" == "darwin"* ]]; then
-    VSCODE_CONFIG_PATH="$HOME/Library/Application Support/Code/User"
+    VSCODE_CONFIG_PATH="$HOME/.vscode-server/data/User"
 elif [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]]; then
-    VSCODE_CONFIG_PATH="$APPDATA/Code/User"
+    VSCODE_CONFIG_PATH="$USERPROFILE/.vscode-server/data/User"
 else
-    VSCODE_CONFIG_PATH="~/.config/Code/User"
+    VSCODE_CONFIG_PATH="$HOME/.vscode-server/data/User"
 fi
 
 # Auto-create VS Code global configuration
@@ -146,36 +146,15 @@ else
     echo "ℹ️ VS Code global configuration already exists"
 fi
 
-# Create workspace configuration template
-echo "📝 Creating workspace configuration template..."
-if [ ! -f ".vscode/mcp.json" ]; then
-    mkdir -p .vscode
-    cat > ".vscode/mcp.json" << 'EOF'
-{
-  "servers": {
-    "copilotMcpToolset": {
-      "type": "stdio",
-      "command": "copilot-mcp-server",
-      "args": ["--workspace=${workspaceFolder}"],
-      "env": {
-        "COPILOT_MCP_WORKSPACE": "${workspaceFolder}"
-      }
-    }
-  }
-}
-EOF
-    echo "✅ Workspace configuration template created at: .vscode/mcp.json"
-else
-    echo "ℹ️ Workspace configuration already exists"
-fi
+# Global installation complete - no workspace configuration needed
 
 echo ""
 echo "🎉 Installation Complete!"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "✅ VS Code is now configured automatically!"
+echo "✅ VS Code is now configured for global MCP access!"
 echo "✅ Global MCP configuration: $VSCODE_CONFIG_PATH/mcp.json"
-echo "✅ Workspace template created: .vscode/mcp.json"
+echo "✅ MCP server available globally across all projects"
 echo ""
 echo "🚀 Ready to use! Just:"
 echo "   1. Restart VS Code"
