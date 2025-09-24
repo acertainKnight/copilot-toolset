@@ -305,6 +305,375 @@ export class UnifiedMemoryManager {
   }
 
   /**
+   * Delete memory with cascade handling for related memories
+   */
+  public async deleteMemory(memoryId: string, cascadeRelated: boolean = false): Promise<{
+    deleted: boolean;
+    relatedDeleted?: number;
+    message: string;
+  }> {
+    await this.initialize();
+
+    try {
+      // First, find the memory to get its details
+      const memory = this.database.prepare(`
+        SELECT * FROM unified_memories WHERE id = ?
+      `).get(memoryId) as any;
+
+      if (!memory) {
+        return {
+          deleted: false,
+          message: `Memory with ID ${memoryId} not found`
+        };
+      }
+
+      let relatedDeleted = 0;
+
+      if (cascadeRelated) {
+        // Find related memories using tags and content similarity
+        const relatedMemories = await this.findRelatedMemories(memory, 0.7); // 70% similarity threshold
+
+        if (relatedMemories.length > 0) {
+          const relatedIds = relatedMemories.map(rm => rm.memory.id);
+          const placeholders = relatedIds.map(() => '?').join(',');
+
+          const deleteRelatedStmt = this.database.prepare(`
+            DELETE FROM unified_memories WHERE id IN (${placeholders})
+          `);
+          const result = deleteRelatedStmt.run(...relatedIds);
+          relatedDeleted = result.changes;
+        }
+      }
+
+      // Delete the primary memory
+      const deleteStmt = this.database.prepare(`DELETE FROM unified_memories WHERE id = ?`);
+      const result = deleteStmt.run(memoryId);
+
+      if (result.changes > 0) {
+        console.error(`[INFO] Deleted memory ${memoryId} (${memory.tier}/${memory.scope})${relatedDeleted > 0 ? ` and ${relatedDeleted} related memories` : ''}`);
+
+        return {
+          deleted: true,
+          relatedDeleted: relatedDeleted,
+          message: `Successfully deleted memory${relatedDeleted > 0 ? ` and ${relatedDeleted} related memories` : ''}`
+        };
+      }
+
+      return {
+        deleted: false,
+        message: 'Failed to delete memory - database error'
+      };
+
+    } catch (error) {
+      console.error('[ERROR] Failed to delete memory:', error);
+      throw new Error(`Delete operation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Check for duplicate memories using semantic similarity
+   */
+  public async checkDuplicateMemory(
+    content: string,
+    tier?: MemoryTier,
+    scope?: MemoryScope,
+    projectId?: string,
+    similarityThreshold: number = 0.8
+  ): Promise<{
+    isDuplicate: boolean;
+    duplicates: UnifiedMemorySearchResult[];
+    recommendation: string;
+  }> {
+    await this.initialize();
+
+    try {
+      // Search for similar content
+      const results = await this.search(content, {
+        tier,
+        scope,
+        project_id: projectId,
+        limit: 10
+      });
+
+      // Filter for high similarity matches
+      const duplicates = results.filter(result => {
+        const similarity = this.calculateSemanticSimilarity(content, result.memory.content);
+        return similarity >= similarityThreshold;
+      });
+
+      let recommendation = '';
+      if (duplicates.length > 0) {
+        const bestMatch = duplicates[0];
+        recommendation = `Similar memory found: "${bestMatch.memory.content.substring(0, 100)}..." (${(bestMatch.similarity_score || 0).toFixed(3)} similarity). Consider updating existing memory instead.`;
+      } else {
+        recommendation = 'No duplicates found. Safe to store new memory.';
+      }
+
+      return {
+        isDuplicate: duplicates.length > 0,
+        duplicates,
+        recommendation
+      };
+
+    } catch (error) {
+      console.error('[ERROR] Failed to check duplicates:', error);
+      throw new Error(`Duplicate check failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Migrate memory between tiers (core ↔ long-term)
+   */
+  public async migrateMemoryTier(
+    memoryId: string,
+    targetTier: MemoryTier,
+    reason?: string
+  ): Promise<{
+    migrated: boolean;
+    fromTier: MemoryTier;
+    toTier: MemoryTier;
+    message: string;
+  }> {
+    await this.initialize();
+
+    try {
+      // Get current memory
+      const memory = this.database.prepare(`
+        SELECT * FROM unified_memories WHERE id = ?
+      `).get(memoryId) as any;
+
+      if (!memory) {
+        return {
+          migrated: false,
+          fromTier: 'core',
+          toTier: targetTier,
+          message: `Memory with ID ${memoryId} not found`
+        };
+      }
+
+      const fromTier = memory.tier as MemoryTier;
+
+      if (fromTier === targetTier) {
+        return {
+          migrated: false,
+          fromTier,
+          toTier: targetTier,
+          message: `Memory is already in ${targetTier} tier`
+        };
+      }
+
+      // Validate core tier size limit if migrating TO core
+      if (targetTier === 'core') {
+        const contentSize = Buffer.byteLength(memory.content, 'utf8');
+        if (contentSize > CORE_MEMORY_SIZE_LIMIT) {
+          return {
+            migrated: false,
+            fromTier,
+            toTier: targetTier,
+            message: `Cannot migrate to core tier: content size (${contentSize} bytes) exceeds 2KB limit`
+          };
+        }
+
+        // Check if core tier has space
+        const currentCoreSize = await this.getCoreMemoryTotalSize(memory.scope, memory.project_id);
+        if (currentCoreSize + contentSize > CORE_MEMORY_SIZE_LIMIT * 10) {
+          return {
+            migrated: false,
+            fromTier,
+            toTier: targetTier,
+            message: 'Core tier is approaching capacity limits'
+          };
+        }
+      }
+
+      // Perform migration
+      const updateStmt = this.database.prepare(`
+        UPDATE unified_memories
+        SET tier = ?,
+            metadata = json_set(metadata, '$.migration_reason', ?, '$.migrated_at', ?, '$.migrated_from', ?)
+        WHERE id = ?
+      `);
+
+      const result = updateStmt.run(
+        targetTier,
+        reason || 'Manual migration',
+        new Date().toISOString(),
+        fromTier,
+        memoryId
+      );
+
+      if (result.changes > 0) {
+        console.error(`[INFO] Migrated memory ${memoryId} from ${fromTier} to ${targetTier} tier`);
+
+        return {
+          migrated: true,
+          fromTier,
+          toTier: targetTier,
+          message: `Successfully migrated memory from ${fromTier} to ${targetTier} tier`
+        };
+      }
+
+      return {
+        migrated: false,
+        fromTier,
+        toTier: targetTier,
+        message: 'Migration failed - database error'
+      };
+
+    } catch (error) {
+      console.error('[ERROR] Failed to migrate memory tier:', error);
+      throw new Error(`Tier migration failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get comprehensive memory analytics including access patterns and trends
+   */
+  public async getMemoryAnalytics(): Promise<{
+    totalMemories: number;
+    tierDistribution: { core: number; longterm: number };
+    scopeDistribution: { global: number; project: number };
+    accessPatterns: {
+      mostAccessed: UnifiedMemory[];
+      recentlyAccessed: UnifiedMemory[];
+      leastAccessed: UnifiedMemory[];
+      averageAccessCount: number;
+    };
+    storageAnalytics: {
+      totalSize: number;
+      averageSize: number;
+      coreTierUtilization: number;
+      longtermGrowthRate: number;
+    };
+    trends: {
+      memoriesCreatedToday: number;
+      memoriesCreatedThisWeek: number;
+      topTags: Array<{ tag: string; count: number }>;
+      activeProjects: Array<{ project: string; memoryCount: number }>;
+    };
+  }> {
+    await this.initialize();
+
+    try {
+      // Basic counts
+      const totalMemories = this.database.prepare(`SELECT COUNT(*) as count FROM unified_memories`).get() as { count: number };
+
+      // Tier distribution
+      const tierStats = this.database.prepare(`
+        SELECT tier, COUNT(*) as count FROM unified_memories GROUP BY tier
+      `).all() as Array<{ tier: string; count: number }>;
+
+      // Scope distribution
+      const scopeStats = this.database.prepare(`
+        SELECT scope, COUNT(*) as count FROM unified_memories GROUP BY scope
+      `).all() as Array<{ scope: string; count: number }>;
+
+      // Access patterns
+      const mostAccessed = this.database.prepare(`
+        SELECT * FROM unified_memories ORDER BY access_count DESC LIMIT 10
+      `).all().map(row => this.rowToUnifiedMemory(row));
+
+      const recentlyAccessed = this.database.prepare(`
+        SELECT * FROM unified_memories ORDER BY accessed_at DESC LIMIT 10
+      `).all().map(row => this.rowToUnifiedMemory(row));
+
+      const leastAccessed = this.database.prepare(`
+        SELECT * FROM unified_memories WHERE access_count = 0 ORDER BY created_at ASC LIMIT 10
+      `).all().map(row => this.rowToUnifiedMemory(row));
+
+      const avgAccess = this.database.prepare(`
+        SELECT AVG(access_count) as avg FROM unified_memories
+      `).get() as { avg: number };
+
+      // Storage analytics
+      const sizeStats = this.database.prepare(`
+        SELECT SUM(content_size) as total, AVG(content_size) as avg FROM unified_memories
+      `).get() as { total: number; avg: number };
+
+      const coreTierSize = this.database.prepare(`
+        SELECT SUM(content_size) as size FROM unified_memories WHERE tier = 'core'
+      `).get() as { size: number };
+
+      // Trend analysis
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const oneWeekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+      const todayCount = this.database.prepare(`
+        SELECT COUNT(*) as count FROM unified_memories WHERE created_at >= ?
+      `).get(today.toISOString()) as { count: number };
+
+      const weekCount = this.database.prepare(`
+        SELECT COUNT(*) as count FROM unified_memories WHERE created_at >= ?
+      `).get(oneWeekAgo.toISOString()) as { count: number };
+
+      // Top tags
+      const tagStats = this.database.prepare(`
+        SELECT tags FROM unified_memories WHERE tags != '[]'
+      `).all() as Array<{ tags: string }>;
+
+      const tagCounts = new Map<string, number>();
+      tagStats.forEach(({ tags }) => {
+        const tagArray = JSON.parse(tags) as string[];
+        tagArray.forEach(tag => {
+          tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
+        });
+      });
+
+      const topTags = Array.from(tagCounts.entries())
+        .map(([tag, count]) => ({ tag, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10);
+
+      // Active projects
+      const projectStats = this.database.prepare(`
+        SELECT project_id, COUNT(*) as count FROM unified_memories
+        WHERE project_id IS NOT NULL
+        GROUP BY project_id
+        ORDER BY count DESC
+        LIMIT 10
+      `).all() as Array<{ project_id: string; count: number }>;
+
+      return {
+        totalMemories: totalMemories.count,
+        tierDistribution: {
+          core: tierStats.find(t => t.tier === 'core')?.count || 0,
+          longterm: tierStats.find(t => t.tier === 'longterm')?.count || 0
+        },
+        scopeDistribution: {
+          global: scopeStats.find(s => s.scope === 'global')?.count || 0,
+          project: scopeStats.find(s => s.scope === 'project')?.count || 0
+        },
+        accessPatterns: {
+          mostAccessed,
+          recentlyAccessed,
+          leastAccessed,
+          averageAccessCount: avgAccess.avg || 0
+        },
+        storageAnalytics: {
+          totalSize: sizeStats.total || 0,
+          averageSize: sizeStats.avg || 0,
+          coreTierUtilization: (coreTierSize.size || 0) / CORE_MEMORY_SIZE_LIMIT,
+          longtermGrowthRate: 0 // Could be calculated with historical data
+        },
+        trends: {
+          memoriesCreatedToday: todayCount.count,
+          memoriesCreatedThisWeek: weekCount.count,
+          topTags,
+          activeProjects: projectStats.map(p => ({
+            project: p.project_id,
+            memoryCount: p.count
+          }))
+        }
+      };
+
+    } catch (error) {
+      console.error('[ERROR] Failed to get memory analytics:', error);
+      throw new Error(`Analytics failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
    * Close database connection
    */
   public async close(): Promise<void> {
@@ -449,5 +818,80 @@ export class UnifiedMemoryManager {
       default:
         return 'Unknown scope';
     }
+  }
+
+  /**
+   * Find related memories using content and tag similarity
+   */
+  private async findRelatedMemories(targetMemory: any, similarityThreshold: number = 0.7): Promise<UnifiedMemorySearchResult[]> {
+    try {
+      const memories = this.database.prepare(`
+        SELECT * FROM unified_memories WHERE id != ?
+      `).all(targetMemory.id) as any[];
+
+      const related: UnifiedMemorySearchResult[] = [];
+
+      for (const memory of memories) {
+        const contentSimilarity = this.calculateSemanticSimilarity(targetMemory.content, memory.content);
+        const tagSimilarity = this.calculateTagSimilarity(
+          JSON.parse(targetMemory.tags || '[]'),
+          JSON.parse(memory.tags || '[]')
+        );
+
+        const overallSimilarity = (contentSimilarity * 0.7) + (tagSimilarity * 0.3);
+
+        if (overallSimilarity >= similarityThreshold) {
+          related.push({
+            memory: this.rowToUnifiedMemory(memory),
+            similarity_score: overallSimilarity,
+            match_type: 'semantic',
+            context: `Related to ${targetMemory.id}`
+          });
+        }
+      }
+
+      return related.sort((a, b) => (b.similarity_score || 0) - (a.similarity_score || 0));
+
+    } catch (error) {
+      console.error('[ERROR] Failed to find related memories:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Calculate semantic similarity between two text strings
+   */
+  private calculateSemanticSimilarity(text1: string, text2: string): number {
+    // Simple word-based similarity calculation
+    // In production, this could use more sophisticated algorithms like cosine similarity
+    const words1 = text1.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+    const words2 = text2.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+
+    if (words1.length === 0 || words2.length === 0) return 0;
+
+    const set1 = new Set(words1);
+    const set2 = new Set(words2);
+
+    const intersection = new Set(Array.from(set1).filter(word => set2.has(word)));
+    const union = new Set(Array.from(set1).concat(Array.from(set2)));
+
+    // Jaccard similarity
+    return intersection.size / union.size;
+  }
+
+  /**
+   * Calculate similarity between two tag arrays
+   */
+  private calculateTagSimilarity(tags1: string[], tags2: string[]): number {
+    if (tags1.length === 0 && tags2.length === 0) return 1;
+    if (tags1.length === 0 || tags2.length === 0) return 0;
+
+    const set1 = new Set(tags1.map(t => t.toLowerCase()));
+    const set2 = new Set(tags2.map(t => t.toLowerCase()));
+
+    const intersection = new Set(Array.from(set1).filter(tag => set2.has(tag)));
+    const union = new Set(Array.from(set1).concat(Array.from(set2)));
+
+    return intersection.size / union.size;
   }
 }
