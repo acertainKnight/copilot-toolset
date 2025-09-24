@@ -484,6 +484,118 @@ ${convention.example ? `Example: ${convention.example}` : ''}`,
 - **Language**: ${analysis.language}
 - **Framework**: ${analysis.framework || 'None'}
 
+## 🚨 MANDATORY: Chat Session Initialization Protocol
+
+**EVERY GitHub Copilot chat session MUST start with these steps in order:**
+
+### 1. Load User Preferences (REQUIRED FIRST STEP)
+\`\`\`
+@copilot ALWAYS start with: get_user_preferences
+
+This tool extracts ALL user preferences from global core memory including:
+- Coding style preferences (functional vs OOP, formatting, etc.)
+- Languages & frameworks (TypeScript, React, Python, etc.)
+- Testing approaches (Jest, pytest, TDD, etc.)
+- Documentation styles (JSDoc, type hints, etc.)
+- Architecture & design patterns
+- Tools & libraries (ESLint, Prettier, etc.)
+- General coding preferences and conventions
+\`\`\`
+
+**If no preferences are found:**
+\`\`\`
+@copilot Use extract_coding_preferences to analyze current conversation:
+extract_coding_preferences conversation_text="[copy recent relevant conversation text]"
+  context_description="project setup" auto_store=true
+\`\`\`
+
+### 2. Curate Comprehensive Context (RECOMMENDED SECOND STEP)
+\`\`\`
+@copilot Use curate_context for intelligent context assembly:
+curate_context task_description="[describe current task/feature/issue]"
+  include_preferences=true include_project_patterns=true context_depth="standard"
+
+This combines:
+- User preferences (highest priority)
+- Task-specific memories and patterns
+- Project-specific conventions and architecture
+- Priority-weighted context for optimal guidance
+\`\`\`
+
+### 3. Legacy Context Assembly (FALLBACK IF ABOVE TOOLS FAIL)
+\`\`\`
+@copilot Use search_unified_memory to manually assemble context:
+- Project-specific patterns and decisions
+- Architecture choices for this project
+- Previous similar implementations
+- Known issues and solutions
+\`\`\`
+
+### 3. Review Context Before Action (REQUIRED THIRD STEP)
+- Analyze loaded preferences for consistency
+- Check project context for constraints
+- Identify any conflicts between preferences and project needs
+- Only proceed with coding after context review is complete
+
+## 📋 User Preference Categories
+
+**When loading or storing user preferences, organize by these categories:**
+
+### 1. Coding Style Preferences
+\`\`\`
+@copilot Store in global scope, core tier:
+- Programming paradigm (functional vs OOP vs procedural)
+- Code organization patterns (modules, classes, utilities)
+- Naming conventions (camelCase, snake_case, PascalCase)
+- Code complexity preferences (verbose vs concise)
+\`\`\`
+
+### 2. Formatting & Syntax Preferences
+\`\`\`
+@copilot Store in global scope, core tier:
+- Indentation style (2 spaces, 4 spaces, tabs)
+- Semicolon usage (required, optional, ASI)
+- Quote preferences (single, double, backticks)
+- Bracket styles (same-line, next-line)
+- Line length limits and wrapping preferences
+\`\`\`
+
+### 3. Library & Framework Preferences
+\`\`\`
+@copilot Store in global scope, core tier:
+- Preferred libraries for common tasks (e.g., "always use loguru for Python logging")
+- Framework preferences (React vs Vue, Express vs Fastify)
+- Package manager preferences (npm vs yarn vs pnpm)
+- Version preferences (latest vs LTS vs specific versions)
+\`\`\`
+
+### 4. Testing Methodology Preferences
+\`\`\`
+@copilot Store in global scope, core tier:
+- Testing framework preferences (Jest, Vitest, PyTest)
+- Test structure preferences (AAA, Given-When-Then)
+- Coverage requirements and standards
+- Mock/stub preferences and patterns
+\`\`\`
+
+### 5. Documentation & Comment Styles
+\`\`\`
+@copilot Store in global scope, core tier:
+- Comment density preferences (minimal, moderate, comprehensive)
+- Documentation format (JSDoc, Sphinx, inline comments)
+- README structure preferences
+- Code explanation verbosity
+\`\`\`
+
+### 6. Error Handling Approaches
+\`\`\`
+@copilot Store in global scope, core tier:
+- Exception handling patterns (try-catch, Result types, errors as values)
+- Logging preferences (structured vs unstructured)
+- Error message formatting preferences
+- Debugging approach preferences
+\`\`\`
+
 ## 🚨 CRITICAL: Memory-First Development Workflow
 
 **ALWAYS search memory BEFORE any coding action or implementation planning!**
@@ -492,8 +604,8 @@ ${convention.example ? `Example: ${convention.example}` : ''}`,
 
 **Before writing code, implementing features, or making architectural decisions:**
 
-1. **SEARCH FIRST**: \`search_memory\` to find relevant patterns, preferences, and previous decisions
-2. **ANALYZE**: Review found memories to understand context and constraints  
+1. **SEARCH FIRST**: \`search_unified_memory\` to find relevant patterns, preferences, and previous decisions
+2. **ANALYZE**: Review found memories to understand context and constraints
 3. **IMPLEMENT**: Code with memory-informed approach
 4. **STORE**: Save new patterns, decisions, and learnings for future use
 
@@ -501,23 +613,68 @@ ${convention.example ? `Example: ${convention.example}` : ''}`,
 
 **🔍 Before implementing ANY feature:**
 \`\`\`
-search_memory "similar feature implementation"
-search_memory "architecture patterns this project" 
-search_memory "user preferences coding style"
+search_unified_memory "similar feature implementation"
+search_unified_memory "architecture patterns this project" 
+search_unified_memory "user preferences coding style"
 \`\`\`
 
 **🔍 Before making design decisions:**
 \`\`\`
-search_memory "design patterns used"
-search_memory "technology choices rationale"
-search_memory "previous architectural decisions"
+search_unified_memory "design patterns used"
+search_unified_memory "technology choices rationale"
+search_unified_memory "previous architectural decisions"
 \`\`\`
 
 **🔍 Before debugging or troubleshooting:**
 \`\`\`
-search_memory "similar error patterns"
-search_memory "debugging approaches that worked"
-search_memory "known issues this project"
+search_unified_memory "similar error patterns"
+search_unified_memory "debugging approaches that worked"
+search_unified_memory "known issues this project"
+\`\`\`
+
+## 🔍 Advanced Context Curation & Preference Management
+
+### Intelligent Context Tools Usage
+
+**Primary Tools (Use These First):**
+\`\`\`
+@copilot Use these advanced context tools in this order:
+
+1. get_user_preferences - Fast retrieval of all user preferences
+2. curate_context task_description="[current task]" - Comprehensive context assembly
+3. extract_coding_preferences conversation_text="[conversation]" - Auto-detect new preferences
+\`\`\`
+
+**Legacy Fallback:**
+\`\`\`
+@copilot Use search_unified_memory only when advanced tools are unavailable:
+- For specific technical searches
+- When troubleshooting advanced tool issues
+- For detailed investigation of specific patterns
+\`\`\`
+
+### Context Assembly Priority (Automated by curate_context)
+1. **User Preferences** (global scope, core tier) - Always highest priority
+2. **Task-Specific Patterns** - Relevant to current implementation
+3. **Project Context** (project scope, core tier) - Project conventions
+4. **Similar Solutions** (global scope, longterm tier) - Proven approaches
+
+### Automatic Preference Detection & Storage
+\`\`\`
+@copilot Use extract_coding_preferences when you observe:
+- User mentioning preferences ("I prefer...", "I always...", "I never...")
+- Consistent code patterns across conversations
+- Repeated technology choices and tool selections
+- Similar debugging approaches and methodologies
+- Consistent formatting and documentation styles
+\`\`\`
+
+**Automatic extraction and storage:**
+\`\`\`
+extract_coding_preferences
+  conversation_text="[paste conversation text containing preferences]"
+  context_description="[what was being discussed]"
+  auto_store=true
 \`\`\`
 
 ## Memory System Usage for GitHub Copilot
@@ -562,6 +719,54 @@ search_memory "known issues this project"
 - Performance optimization techniques and results
 - Security best practices and implementations
 - Code refactoring patterns and examples
+\`\`\`
+
+## 🤖 Automatic Preference Extraction
+
+**Extract and store preferences automatically when users express:**
+
+### Coding Style Indicators
+\`\`\`
+User says: "I prefer functional programming"
+Action: store_unified_memory "User prefers functional programming paradigm"
+        scope="global" tier="core" tags=["preference", "coding-style", "functional"]
+
+User says: "Always use arrow functions"
+Action: store_unified_memory "User prefers arrow functions over function declarations"
+        scope="global" tier="core" tags=["preference", "syntax", "functions"]
+\`\`\`
+
+### Library/Framework Preferences
+\`\`\`
+User says: "Use React Query for data fetching"
+Action: store_unified_memory "User prefers React Query for data fetching over alternatives"
+        scope="global" tier="core" tags=["preference", "library", "data-fetching"]
+
+User says: "I don't like Redux, use Zustand instead"
+Action: store_unified_memory "User avoids Redux, prefers Zustand for state management"
+        scope="global" tier="core" tags=["preference", "library", "state-management"]
+\`\`\`
+
+### Testing Preferences
+\`\`\`
+User says: "Write unit tests first"
+Action: store_unified_memory "User follows TDD methodology, writes unit tests first"
+        scope="global" tier="core" tags=["preference", "testing", "methodology", "tdd"]
+\`\`\`
+
+### Formatting Preferences
+\`\`\`
+User says: "Use 2 spaces for indentation"
+Action: store_unified_memory "User prefers 2-space indentation over tabs or 4 spaces"
+        scope="global" tier="core" tags=["preference", "formatting", "indentation"]
+\`\`\`
+
+### Update Preferences When Changed
+\`\`\`
+@copilot When user preferences change:
+1. Search for existing preference: search_unified_memory "previous preference keywords"
+2. Update or override: store_unified_memory "Updated preference with new choice"
+3. Tag as updated: tags=["preference", "updated", "category"]
 \`\`\`
 
 ## Automatic Context Recognition
@@ -614,6 +819,69 @@ ${analysis.commands.map(c => `- \`npm run ${c.name}\`: ${c.description}`).join('
 
 This is a ${analysis.type} project using ${analysis.language}.
 
+## 🚨 MANDATORY: Chat Session Initialization Protocol
+
+**EVERY AI assistant chat session MUST start with these steps in order:**
+
+### 1. Load User Preferences (REQUIRED FIRST STEP)
+\`\`\`
+Use store_unified_memory with scope="global" to search for:
+- User coding preferences (functional vs OOP, formatting, etc.)
+- Library and framework preferences
+- Testing methodologies and patterns
+- Documentation and comment styles
+- Error handling approaches
+\`\`\`
+
+**Always search for preferences with:**
+\`\`\`
+search_unified_memory "user preferences"
+search_unified_memory "coding style preferences"
+search_unified_memory "framework preferences"
+search_unified_memory "testing preferences"
+\`\`\`
+
+### 2. Curate Context (REQUIRED SECOND STEP)
+\`\`\`
+Use search_unified_memory to assemble comprehensive context:
+- Project-specific patterns and decisions
+- Architecture choices for this project
+- Previous similar implementations
+- Known issues and solutions
+\`\`\`
+
+### 3. Review Context Before Action (REQUIRED THIRD STEP)
+- Analyze loaded preferences for consistency
+- Check project context for constraints
+- Identify any conflicts between preferences and project needs
+- Only proceed with coding after context review is complete
+
+## 📋 Automatic Preference Detection
+
+**Detect and store user preferences automatically when observed:**
+
+### Coding Patterns to Watch For:
+- Consistent programming paradigm choices (functional vs OOP)
+- Repeated library/framework selections
+- Consistent formatting and syntax patterns
+- Testing approach preferences
+- Error handling patterns
+
+### Storage Instructions:
+\`\`\`
+When detecting preferences, immediately store with:
+store_unified_memory "User consistently prefers [specific pattern]"
+  scope="global" tier="core" tags=["preference", "detected", "category"]
+\`\`\`
+
+### Preference Categories:
+1. **Coding Style**: paradigm, organization, naming conventions
+2. **Formatting**: indentation, semicolons, quotes, brackets
+3. **Libraries**: preferred packages for common tasks
+4. **Testing**: framework, methodology, coverage standards
+5. **Documentation**: comment density, format preferences
+6. **Error Handling**: exception patterns, logging styles
+
 ## 🚨 CRITICAL: Memory-First Development Workflow
 
 **ALWAYS search memory BEFORE any coding action or implementation planning!**
@@ -622,8 +890,8 @@ This is a ${analysis.type} project using ${analysis.language}.
 
 **Before writing code, implementing features, or making architectural decisions:**
 
-1. **SEARCH FIRST**: \`search_memory\` to find relevant patterns, preferences, and previous decisions
-2. **ANALYZE**: Review found memories to understand context and constraints  
+1. **SEARCH FIRST**: \`search_unified_memory\` to find relevant patterns, preferences, and previous decisions
+2. **ANALYZE**: Review found memories to understand context and constraints
 3. **IMPLEMENT**: Code with memory-informed approach
 4. **STORE**: Save new patterns, decisions, and learnings for future use
 
@@ -631,32 +899,33 @@ This is a ${analysis.type} project using ${analysis.language}.
 
 **🔍 Before implementing ANY feature:**
 \`\`\`
-search_memory "similar feature implementation"
-search_memory "architecture patterns this project" 
-search_memory "user preferences coding style"
+search_unified_memory "similar feature implementation"
+search_unified_memory "architecture patterns this project" 
+search_unified_memory "user preferences coding style"
 \`\`\`
 
 **🔍 Before making design decisions:**
 \`\`\`
-search_memory "design patterns used"
-search_memory "technology choices rationale"
-search_memory "previous architectural decisions"
+search_unified_memory "design patterns used"
+search_unified_memory "technology choices rationale"
+search_unified_memory "previous architectural decisions"
 \`\`\`
 
 **🔍 Before debugging or troubleshooting:**
 \`\`\`
-search_memory "similar error patterns"
-search_memory "debugging approaches that worked"
-search_memory "known issues this project"
+search_unified_memory "similar error patterns"
+search_unified_memory "debugging approaches that worked"
+search_unified_memory "known issues this project"
 \`\`\`
 
 ### Memory Management Instructions
 
 **Use MCP memory tools to maintain context:**
 
-1. **Search for existing patterns**: Use \`search_memory\` before suggesting solutions
-2. **Store new learnings**: Use \`store_memory\` to remember decisions and patterns
+1. **Search for existing patterns**: Use \`search_unified_memory\` before suggesting solutions
+2. **Store new learnings**: Use \`store_unified_memory\` to remember decisions and patterns
 3. **Check memory stats**: Use \`get_memory_stats\` to understand storage locations
+4. **Load preferences first**: Always search for user preferences at session start
 
 ### Memory Storage Strategy
 
@@ -664,6 +933,12 @@ search_memory "known issues this project"
 - **Project Context** → Project scope, core tier (isolated to this project)
 - **Detailed Solutions** → Global scope, longterm tier (comprehensive knowledge base)
 - **Project Documentation** → Project scope, longterm tier (detailed project information)
+
+### Context Assembly Workflow
+1. Load user preferences (global core memories)
+2. Load project context (project core memories)
+3. Search for similar patterns (global longterm memories)
+4. Combine contexts to inform decisions
 
 ## Project Analysis
 

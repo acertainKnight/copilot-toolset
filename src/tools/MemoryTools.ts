@@ -9,7 +9,8 @@ import { z } from 'zod';
 import { MCPTool, TOOL_CATEGORIES, TOOL_PERMISSIONS } from '../server/MCPToolDecorator.js';
 import { MemoryManager } from '../memory/MemoryManager.js';
 import { UnifiedMemoryManager } from '../memory/UnifiedMemoryManager.js';
-import type { MemoryLayer, MemoryTier, MemoryScope, ToolExecutionContext } from '../types/index.js';
+import type { MemoryLayer, MemoryTier, MemoryScope } from '../types/index.js';
+import type { ToolExecutionContext } from '../types/MCPCompliant.js';
 
 /**
  * Memory Tools with automatic MCP registration
@@ -57,14 +58,14 @@ export class MemoryTools {
     metadata?: Record<string, any>;
   }, context: ToolExecutionContext) {
     try {
-      const memoryId = await this.unifiedMemoryManager.store({
+      const memoryId = await this.unifiedMemoryManager.store(
         content,
         tier,
         scope,
-        project_id: scope === 'project' ? (project_id || context.workspacePath || 'default') : undefined,
-        tags: tags || [],
-        metadata: metadata || {}
-      });
+        scope === 'project' ? (project_id || context.workspacePath || 'default') : undefined,
+        tags || [],
+        metadata || {}
+      );
 
       const storageDescription = this.getUnifiedStorageDescription(tier, scope);
 
@@ -123,13 +124,15 @@ The memory is now available for search and retrieval across the system.`
     project_id?: string;
   }, context: ToolExecutionContext) {
     try {
-      const results = await this.unifiedMemoryManager.search({
+      const results = await this.unifiedMemoryManager.search(
         query,
-        tier: tier === 'both' ? undefined : tier,
-        scope: scope === 'both' ? undefined : scope,
-        project_id: scope === 'project' ? (project_id || context.workspacePath || 'default') : undefined,
-        limit: limit || 10
-      });
+        {
+          tier: tier === 'both' ? undefined : tier,
+          scope: scope === 'both' ? undefined : scope,
+          project_id: scope === 'project' ? (project_id || context.workspacePath || 'default') : undefined,
+          limit: limit || 10
+        }
+      );
 
       if (results.length === 0) {
         return {
@@ -141,14 +144,14 @@ The memory is now available for search and retrieval across the system.`
       }
 
       const resultText = results.map((result, index) => {
-        const tierIcon = result.tier === 'core' ? '⭐' : '📚';
-        const scopeIcon = result.scope === 'global' ? '🌐' : '📁';
+        const tierIcon = result.memory.tier === 'core' ? '⭐' : '📚';
+        const scopeIcon = result.memory.scope === 'global' ? '🌐' : '📁';
 
-        return `${index + 1}. ${tierIcon}${scopeIcon} **${result.tier}/${result.scope}**
-Content: ${result.content}
-Tags: ${result.tags.join(', ') || 'none'}
-Created: ${new Date(result.created_at).toLocaleString()}
-Score: ${result.score?.toFixed(3) || 'N/A'}`;
+        return `${index + 1}. ${tierIcon}${scopeIcon} **${result.memory.tier}/${result.memory.scope}**
+Content: ${result.memory.content}
+Tags: ${result.memory.tags?.join(', ') || 'none'}
+Created: ${new Date(result.memory.created_at).toLocaleString()}
+Score: ${result.similarity_score?.toFixed(3) || 'N/A'}`;
       }).join('\n\n');
 
       return {
@@ -186,7 +189,7 @@ Legend: ⭐ = Core tier, 📚 = Long-term tier, 🌐 = Global scope, 📁 = Proj
   })
   async getUnifiedMemoryStats(_: {}, context: ToolExecutionContext) {
     try {
-      const stats = await this.unifiedMemoryManager.getStats();
+      const stats = await this.unifiedMemoryManager.getMemoryStats();
 
       return {
         content: [{
@@ -604,8 +607,472 @@ ${analytics.trends.topTags.length === 0 ? '• Consider adding tags to memories 
   }
 
   /**
+   * Get user preferences from global core memory
+   */
+  @MCPTool({
+    name: 'get_user_preferences',
+    title: 'Get User Preferences',
+    description: 'Extract ALL user preferences from global core memory including coding style, testing approach, libraries, patterns, and documentation preferences',
+    category: TOOL_CATEGORIES.MEMORY,
+    permissions: [TOOL_PERMISSIONS.DATABASE_READ],
+    rateLimit: 5,
+    inputSchema: {}
+  })
+  async getUserPreferences(_: {}, context: ToolExecutionContext) {
+    try {
+      // Search for preference-related memories in global core tier
+      const preferenceResults = await this.unifiedMemoryManager.search(
+        'prefer preference style pattern library framework testing documentation approach convention rule always never',
+        {
+          tier: 'core',
+          scope: 'global',
+          limit: 50
+        }
+      );
+
+      if (preferenceResults.length === 0) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `📋 **User Preferences**
+
+🔍 **No user preferences found in global core memory.**
+
+**Recommendations:**
+- Start a new chat session and mention your preferences (e.g., "I prefer TypeScript over JavaScript")
+- Use \`extract_coding_preferences\` to analyze existing conversations
+- Manually store preferences with \`store_unified_memory\` using tier='core', scope='global'
+
+**Example preference storage:**
+\`\`\`
+"I prefer functional programming patterns with immutable data structures, TypeScript for all new projects, Jest for testing, and detailed JSDoc comments for all public APIs."
+\`\`\``
+          }]
+        };
+      }
+
+      // Categorize preferences
+      const categories = {
+        'Coding Style & Patterns': [] as typeof preferenceResults,
+        'Languages & Frameworks': [] as typeof preferenceResults,
+        'Testing Approach': [] as typeof preferenceResults,
+        'Documentation': [] as typeof preferenceResults,
+        'Architecture & Design': [] as typeof preferenceResults,
+        'Tools & Libraries': [] as typeof preferenceResults,
+        'General Preferences': [] as typeof preferenceResults
+      };
+
+      // Smart categorization based on content
+      for (const result of preferenceResults) {
+        const content = result.memory.content.toLowerCase();
+
+        if (content.includes('test') || content.includes('spec') || content.includes('jest') || content.includes('mocha') || content.includes('cypress')) {
+          categories['Testing Approach'].push(result);
+        } else if (content.includes('document') || content.includes('comment') || content.includes('jsdoc') || content.includes('readme')) {
+          categories['Documentation'].push(result);
+        } else if (content.includes('react') || content.includes('vue') || content.includes('angular') || content.includes('typescript') || content.includes('javascript') || content.includes('python') || content.includes('java')) {
+          categories['Languages & Frameworks'].push(result);
+        } else if (content.includes('architecture') || content.includes('pattern') || content.includes('design') || content.includes('mvc') || content.includes('component')) {
+          categories['Architecture & Design'].push(result);
+        } else if (content.includes('library') || content.includes('package') || content.includes('dependency') || content.includes('tool') || content.includes('eslint') || content.includes('prettier')) {
+          categories['Tools & Libraries'].push(result);
+        } else if (content.includes('style') || content.includes('format') || content.includes('convention') || content.includes('indent') || content.includes('camel') || content.includes('snake')) {
+          categories['Coding Style & Patterns'].push(result);
+        } else {
+          categories['General Preferences'].push(result);
+        }
+      }
+
+      // Format output with rich categorization
+      const formattedCategories = Object.entries(categories)
+        .filter(([_, prefs]) => prefs.length > 0)
+        .map(([category, prefs]) => {
+          const categoryIcon = this.getCategoryIcon(category);
+          const prefList = prefs.slice(0, 5).map((pref, index) => {
+            return `  ${index + 1}. ${pref.memory.content} ${pref.memory.tags && pref.memory.tags.length > 0 ? `[${pref.memory.tags.join(', ')}]` : ''}`;
+          }).join('\n');
+
+          return `${categoryIcon} **${category}** (${prefs.length} preference${prefs.length > 1 ? 's' : ''}):
+${prefList}${prefs.length > 5 ? `\n  ... and ${prefs.length - 5} more` : ''}`;
+        }).join('\n\n');
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `📋 **User Preferences Summary**
+
+Found **${preferenceResults.length}** user preferences in global core memory:
+
+${formattedCategories}
+
+**💡 Usage Tips:**
+- These preferences are automatically loaded for each chat session
+- Use \`curate_context\` to combine preferences with project-specific context
+- Update preferences with \`store_unified_memory\` (tier='core', scope='global')
+- Extract new preferences from conversations with \`extract_coding_preferences\`
+
+**🎯 Context Priority:** User Preferences → Project Patterns → General Knowledge`
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Failed to get user preferences: ${error instanceof Error ? error.message : 'Unknown error'}`
+        }],
+        isError: true
+      };
+    }
+  }
+
+  /**
+   * Extract coding preferences from conversation history and code examples
+   */
+  @MCPTool({
+    name: 'extract_coding_preferences',
+    title: 'Extract Coding Preferences',
+    description: 'Analyze conversation history and code to detect implicit user preferences, storing discovered patterns automatically in global core memory',
+    category: TOOL_CATEGORIES.MEMORY,
+    permissions: [TOOL_PERMISSIONS.DATABASE_WRITE],
+    rateLimit: 3, // Lower rate limit for analysis-intensive operation
+    inputSchema: {
+      conversation_text: z.string().min(1).describe('Conversation text or code examples to analyze for preferences'),
+      context_description: z.string().optional().describe('Optional context about what was being discussed or implemented'),
+      auto_store: z.boolean().optional().default(true).describe('Whether to automatically store discovered preferences (default: true)')
+    }
+  })
+  async extractCodingPreferences({
+    conversation_text,
+    context_description,
+    auto_store
+  }: {
+    conversation_text: string;
+    context_description?: string;
+    auto_store?: boolean;
+  }, context: ToolExecutionContext) {
+    try {
+      const preferences: string[] = [];
+      const text = conversation_text.toLowerCase();
+
+      // Pattern recognition for explicit preferences
+      const explicitPatterns = [
+        /i prefer (?:to )?(.+?)(?:\.|$|,|\n)/g,
+        /i like (?:to )?(.+?)(?:\.|$|,|\n)/g,
+        /i always (?:use )?(.+?)(?:\.|$|,|\n)/g,
+        /i never (?:use )?(.+?)(?:\.|$|,|\n)/g,
+        /my preference is (?:to )?(.+?)(?:\.|$|,|\n)/g,
+        /we should (?:always )?(.+?)(?:\.|$|,|\n)/g,
+        /let's use (.+?)(?:\.|$|,|\n)/g,
+        /make sure (?:to )?(.+?)(?:\.|$|,|\n)/g
+      ];
+
+      for (const pattern of explicitPatterns) {
+        let match;
+        while ((match = pattern.exec(text)) !== null) {
+          if (match[1] && match[1].trim().length > 5 && match[1].trim().length < 200) {
+            preferences.push(`Prefers to ${match[1].trim()}`);
+          }
+        }
+      }
+
+      // Code pattern analysis
+      const codePatterns = {
+        'TypeScript over JavaScript': /\.ts[x]?|typescript|interface \w+|type \w+/,
+        'Functional programming patterns': /\.map\(|\.filter\(|\.reduce\(|const.*=.*=>|pure function/,
+        'ESLint configuration': /eslint|\.eslintrc/,
+        'Prettier formatting': /prettier|\.prettierrc/,
+        'Jest testing framework': /jest|describe\(|it\(|test\(/,
+        'React with hooks': /usestate|useeffect|usereact|react hooks/,
+        'Component-based architecture': /component|\.component\.|export.*component/,
+        'Async/await over promises': /async.*await|await.*async/,
+        'Destructuring syntax': /const \{.*\} =|const \[.*\] =/,
+        'JSDoc documentation': /\/\*\*.*@param|\/\*\*.*@returns|jsdoc/
+      };
+
+      for (const [preference, pattern] of Object.entries(codePatterns)) {
+        if (pattern.test(text)) {
+          preferences.push(`Uses ${preference}`);
+        }
+      }
+
+      // Framework/library detection
+      const frameworkPatterns = {
+        'React development': /react|jsx|usestate|useeffect/,
+        'Vue.js development': /vue|@vue|\.vue/,
+        'Angular development': /angular|@angular|\.component\.ts/,
+        'Node.js backend': /express|fastify|node\.js|npm/,
+        'Python development': /python|\.py|def |import /,
+        'Docker containerization': /docker|dockerfile|docker-compose/,
+        'Git workflow': /git commit|pull request|merge|branch/
+      };
+
+      for (const [preference, pattern] of Object.entries(frameworkPatterns)) {
+        if (pattern.test(text)) {
+          preferences.push(`Works with ${preference}`);
+        }
+      }
+
+      // Remove duplicates and filter quality
+      const uniquePreferences = [...new Set(preferences)]
+        .filter(pref => pref.length > 10 && pref.length < 150)
+        .slice(0, 10); // Limit to top 10 most relevant
+
+      if (uniquePreferences.length === 0) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `🔍 **Preference Extraction Results**
+
+❌ **No clear preferences detected** in the provided text.
+
+**To improve detection, provide text that includes:**
+- Explicit statements like "I prefer...", "I always use...", "I never..."
+- Code examples showing patterns and choices
+- Discussions about tools, frameworks, or methodologies
+- Architecture or design decision explanations
+
+**Manual preference storage:**
+Use \`store_unified_memory\` with tier='core', scope='global' to manually add preferences.`
+          }]
+        };
+      }
+
+      let storedCount = 0;
+      if (auto_store !== false) {
+        // Store each preference in global core memory
+        for (const preference of uniquePreferences) {
+          try {
+            await this.unifiedMemoryManager.store(
+              preference,
+              'core',
+              'global',
+              undefined,
+              ['user-preference', 'extracted', context_description ? `context:${context_description}` : 'general'],
+              { extracted_at: new Date().toISOString(), source: 'conversation_analysis' }
+            );
+            storedCount++;
+          } catch (error) {
+            // Continue with other preferences if one fails
+            console.error(`Failed to store preference: ${preference}`, error);
+          }
+        }
+      }
+
+      const extractedList = uniquePreferences.map((pref, index) => `${index + 1}. ${pref}`).join('\n');
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `🎯 **Preference Extraction Results**
+
+✅ **Discovered ${uniquePreferences.length} coding preferences:**
+
+${extractedList}
+
+${auto_store !== false ? `📥 **Stored ${storedCount}/${uniquePreferences.length} preferences** in global core memory` : '🔄 **Analysis only** - preferences not stored (auto_store=false)'}
+
+${context_description ? `📝 **Context:** ${context_description}` : ''}
+
+**💡 Next Steps:**
+- Use \`get_user_preferences\` to see all stored preferences
+- Use \`curate_context\` to apply these preferences to project work
+- Continue conversations mentioning preferences to improve detection
+
+**🏷️ Tags:** user-preference, extracted${context_description ? `, context:${context_description}` : ', general'}`
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Failed to extract coding preferences: ${error instanceof Error ? error.message : 'Unknown error'}`
+        }],
+        isError: true
+      };
+    }
+  }
+
+  /**
+   * Curate comprehensive context combining user preferences, project context, and codebase insights
+   */
+  @MCPTool({
+    name: 'curate_context',
+    title: 'Curate Context',
+    description: 'Generate comprehensive context for agent initialization by combining user preferences, project patterns, and codebase search with priority-weighted context',
+    category: TOOL_CATEGORIES.MEMORY,
+    permissions: [TOOL_PERMISSIONS.DATABASE_READ],
+    rateLimit: 2, // Lower rate limit for comprehensive operation
+    inputSchema: {
+      task_description: z.string().min(1).describe('Description of the task or area of focus'),
+      include_preferences: z.boolean().optional().default(true).describe('Include user preferences from global core memory'),
+      include_project_patterns: z.boolean().optional().default(true).describe('Include project-specific patterns and conventions'),
+      context_depth: z.enum(['minimal', 'standard', 'comprehensive']).optional().default('standard').describe('Depth of context to generate')
+    }
+  })
+  async curateContext({
+    task_description,
+    include_preferences,
+    include_project_patterns,
+    context_depth
+  }: {
+    task_description: string;
+    include_preferences?: boolean;
+    include_project_patterns?: boolean;
+    context_depth?: 'minimal' | 'standard' | 'comprehensive';
+  }, context: ToolExecutionContext) {
+    try {
+      const contextSections: string[] = [];
+      const currentProject = context.workspacePath || 'default';
+      const maxResults = context_depth === 'minimal' ? 5 : (context_depth === 'comprehensive' ? 20 : 10);
+
+      // 1. User Preferences (Highest Priority)
+      let preferences: any[] = [];
+      if (include_preferences !== false) {
+        preferences = await this.unifiedMemoryManager.search(
+          'prefer preference style pattern approach convention rule always never',
+          {
+            tier: 'core',
+            scope: 'global',
+            limit: maxResults
+          }
+        );
+
+        if (preferences.length > 0) {
+          const prefList = preferences.map(pref => `- ${pref.memory.content}`).join('\n');
+          contextSections.push(`🎯 **User Preferences** (${preferences.length} items):
+${prefList}`);
+        }
+      }
+
+      // 2. Task-Specific Memory Search
+      const taskMemories = await this.unifiedMemoryManager.search(
+        task_description,
+        {
+          // Search both tiers and scopes for task-specific memories
+          limit: maxResults
+        }
+      );
+
+      if (taskMemories.length > 0) {
+        const taskList = taskMemories.slice(0, context_depth === 'minimal' ? 3 : 8).map((mem, index) => {
+          const tierIcon = mem.memory.tier === 'core' ? '⭐' : '📚';
+          const scopeIcon = mem.memory.scope === 'global' ? '🌐' : '📁';
+          return `${index + 1}. ${tierIcon}${scopeIcon} ${mem.memory.content}`;
+        }).join('\n');
+
+        contextSections.push(`🔍 **Task-Related Memories** (${taskMemories.length} found):
+${taskList}`);
+      }
+
+      // 3. Project-Specific Patterns (if enabled)
+      let projectMemories: any[] = [];
+      if (include_project_patterns !== false) {
+        projectMemories = await this.unifiedMemoryManager.search(
+          'pattern convention architecture structure framework library',
+          {
+            scope: 'project',
+            project_id: currentProject,
+            limit: context_depth === 'comprehensive' ? 15 : 8
+          }
+        );
+
+        if (projectMemories.length > 0) {
+          const projectList = projectMemories.map(mem => `- ${mem.memory.content}`).join('\n');
+          contextSections.push(`📁 **Project Patterns** (${projectMemories.length} items):
+${projectList}`);
+        }
+      }
+
+      // 4. Generate Context Summary
+      const totalMemories = (include_preferences !== false ? preferences.length : 0) +
+                           taskMemories.length +
+                           (include_project_patterns !== false ? projectMemories.length : 0);
+
+      if (contextSections.length === 0) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `📋 **Curated Context for: "${task_description}"**
+
+⚠️ **No relevant context found.**
+
+**Recommendations:**
+1. Store your preferences: \`get_user_preferences\` or \`extract_coding_preferences\`
+2. Add project patterns: Use \`store_unified_memory\` with scope='project'
+3. Provide more specific task description
+4. Initialize project memory with \`init_project\`
+
+**Current Search Coverage:**
+- User Preferences: ${include_preferences !== false ? 'Enabled' : 'Disabled'}
+- Project Patterns: ${include_project_patterns !== false ? 'Enabled' : 'Disabled'}
+- Context Depth: ${context_depth}`
+          }]
+        };
+      }
+
+      // Generate comprehensive guidance
+      const guidanceSection = this.generateContextGuidance(task_description, totalMemories, context_depth);
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `📋 **Curated Context for: "${task_description}"**
+
+${contextSections.join('\n\n')}
+
+${guidanceSection}
+
+**🎯 Context Priority:** User Preferences → Project Patterns → Task-Specific Knowledge → General Expertise
+
+**💡 Usage:** Apply this context when planning, implementing, and documenting your work to ensure consistency with established patterns and preferences.`
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Failed to curate context: ${error instanceof Error ? error.message : 'Unknown error'}`
+        }],
+        isError: true
+      };
+    }
+  }
+
+  /**
    * Helper methods
    */
+  private getCategoryIcon(category: string): string {
+    const icons: Record<string, string> = {
+      'Coding Style & Patterns': '🎨',
+      'Languages & Frameworks': '⚡',
+      'Testing Approach': '🧪',
+      'Documentation': '📚',
+      'Architecture & Design': '🏗️',
+      'Tools & Libraries': '🔧',
+      'General Preferences': '⚙️'
+    };
+    return icons[category] || '📋';
+  }
+
+  private generateContextGuidance(taskDescription: string, totalMemories: number, depth: string): string {
+    const depthGuidance = {
+      'minimal': 'Focus on core preferences and immediate requirements',
+      'standard': 'Balance between thoroughness and practicality',
+      'comprehensive': 'Include all relevant context and background information'
+    };
+
+    return `📊 **Context Summary:**
+- Total Relevant Memories: ${totalMemories}
+- Context Depth: ${depth} (${depthGuidance[depth as keyof typeof depthGuidance]})
+- Task Focus: ${taskDescription.length > 50 ? taskDescription.substring(0, 50) + '...' : taskDescription}
+
+**🎯 Implementation Guidance:**
+- Apply user preferences consistently across all code
+- Follow established project patterns and conventions
+- Reference task-specific memories for context and constraints
+- Maintain consistency with previous decisions and implementations`;
+  }
+
   private getUnifiedStorageDescription(tier: MemoryTier, scope: MemoryScope): string {
     const tierDesc = tier === 'core' ? 'Core tier (2KB limit, high priority)' : 'Long-term tier (unlimited storage)';
     const scopeDesc = scope === 'global' ? 'Global scope (cross-project)' : 'Project scope (project-specific)';
