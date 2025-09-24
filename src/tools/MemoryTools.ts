@@ -1101,7 +1101,7 @@ ${instruction}
       let filesUpdated = 0;
       const results: string[] = [];
 
-      // Update .github/copilot-instructions.md
+      // Update ONLY .github/copilot-instructions.md (GitHub Copilot's instruction file)
       if (instructionsExist) {
         const instructionsContent = await fs.readFile(copilotInstructionsPath, 'utf8');
 
@@ -1153,40 +1153,25 @@ ${memorizedEntry}
         await fs.writeFile(copilotInstructionsPath, updatedContent);
         filesUpdated++;
         results.push('✅ Updated .github/copilot-instructions.md');
+      } else if (copilotMdExists) {
+        // If GitHub Copilot instructions don't exist but COPILOT.md does,
+        // suggest creating the proper instructions file
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `⚠️ **GitHub Copilot Instructions Missing**
+
+Found COPILOT.md but .github/copilot-instructions.md doesn't exist.
+
+The memorize tool only updates .github/copilot-instructions.md (GitHub Copilot's instruction file).
+
+Please run \`init_project\` to create the proper GitHub Copilot instruction file.`
+          }],
+          isError: true
+        };
       }
 
-      // Update COPILOT.md
-      if (copilotMdExists) {
-        const copilotContent = await fs.readFile(copilotMdPath, 'utf8');
-
-        let updatedContent;
-        if (copilotContent.includes('# 🧠 MEMORIZED INSTRUCTIONS')) {
-          // Add to existing section
-          const memorizedSectionIndex = copilotContent.indexOf('# 🧠 MEMORIZED INSTRUCTIONS');
-          const nextSectionIndex = copilotContent.indexOf('\n#', memorizedSectionIndex + 1);
-
-          if (nextSectionIndex === -1) {
-            updatedContent = copilotContent + memorizedEntry;
-          } else {
-            updatedContent = copilotContent.slice(0, nextSectionIndex) +
-                             memorizedEntry +
-                             copilotContent.slice(nextSectionIndex);
-          }
-        } else {
-          // Create new memorized section
-          const memorizedSection = `
-# 🧠 MEMORIZED INSTRUCTIONS
-
-**These are PERMANENT instructions that must ALWAYS be followed:**
-${memorizedEntry}
-`;
-          updatedContent = copilotContent + memorizedSection;
-        }
-
-        await fs.writeFile(copilotMdPath, updatedContent);
-        filesUpdated++;
-        results.push('✅ Updated COPILOT.md');
-      }
+      // DO NOT update COPILOT.md - memorize tool only affects GitHub Copilot instructions
 
       // Also store in core memory for immediate access
       await this.unifiedMemoryManager.store(
@@ -1216,10 +1201,10 @@ ${memorizedEntry}
 **Files Updated** (${filesUpdated}):
 ${results.join('\n')}
 
+✅ **Added to GitHub Copilot instructions** (.github/copilot-instructions.md)
 ✅ **Stored in core memory** for immediate access
-✅ **Added to copilot instructions** for permanent retention
 
-This instruction will now ALWAYS be followed by the agent in this project.`
+This instruction will now ALWAYS be followed by GitHub Copilot in this project.`
         }]
       };
 
