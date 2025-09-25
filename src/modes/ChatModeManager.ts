@@ -1,6 +1,7 @@
 /**
- * Chat Mode Manager - Simple GitHub Copilot chat mode generation
- * Generates .chatmode.md files that GitHub Copilot can use directly
+ * GitHub Copilot Chat Mode Manager
+ * 100% GitHub Copilot standard - generates .chatmode.md files only
+ * Supports natural language mode creation with intelligent system prompt generation
  */
 
 import * as fs from 'fs/promises';
@@ -10,13 +11,14 @@ import { Logger } from '../types/index.js';
 export interface ChatModeRequest {
   name: string;
   description: string;
-  systemPrompt: string;
+  naturalLanguageSpec: string; // What the user wants the mode to do in natural language
   tools?: string[];
-  temperature?: number;
+  model?: string;
 }
 
 /**
- * Simplified ChatModeManager - just generates GitHub Copilot .chatmode.md files
+ * Pure GitHub Copilot ChatModeManager - generates only .chatmode.md files
+ * No dual storage, no JSON files, 100% GitHub Copilot compatible
  */
 export class ChatModeManager {
   private logger: Logger;
@@ -26,29 +28,42 @@ export class ChatModeManager {
   }
 
   /**
-   * Create a GitHub Copilot chat mode file
+   * Create a GitHub Copilot chat mode file from natural language specification
    */
   async createMode(request: ChatModeRequest): Promise<string> {
     try {
       // Validate basic requirements
-      if (!request.name || !request.description || !request.systemPrompt) {
-        throw new Error('Name, description, and systemPrompt are required');
+      if (!request.name || !request.description || !request.naturalLanguageSpec) {
+        throw new Error('Name, description, and naturalLanguageSpec are required');
       }
 
-      // Create .github/chatmodes directory
+      // Generate detailed system prompt from natural language specification
+      const systemPrompt = this.generateDetailedSystemPrompt(request);
+
+      // Determine appropriate tools for the mode
+      const tools = this.selectToolsForMode(request);
+
+      // Create .github/chatmodes directory (GitHub Copilot standard location)
       const chatmodesDir = path.join(process.cwd(), '.github', 'chatmodes');
       await fs.mkdir(chatmodesDir, { recursive: true });
 
-      // Generate the .chatmode.md file content
-      const content = this.generateChatModeContent(request);
+      // Generate 100% GitHub Copilot compatible .chatmode.md content
+      const content = this.generateGitHubCopilotChatMode({
+        name: request.name,
+        description: request.description,
+        systemPrompt,
+        tools,
+        model: request.model
+      });
 
-      // Write to file
+      // Write ONLY the GitHub Copilot .chatmode.md file
       const filePath = path.join(chatmodesDir, `${request.name}.chatmode.md`);
       await fs.writeFile(filePath, content);
 
       this.logger.info('Created GitHub Copilot chat mode', {
         name: request.name,
-        filePath: filePath
+        filePath: filePath,
+        tools: tools.length
       });
 
       return filePath;
@@ -84,87 +99,41 @@ export class ChatModeManager {
    * Generate built-in chat modes for a project
    */
   async generateBuiltInModes(): Promise<void> {
-    const builtInModes: ChatModeRequest[] = [
+    const builtInModes = [
       {
         name: 'architect',
         description: 'System design and architecture planning specialist',
-        systemPrompt: `You are a software architecture expert specializing in system design and planning.
-
-Your role is to:
-- Analyze existing system architectures and suggest improvements
-- Help design scalable and maintainable solutions
-- Provide architectural decision guidance
-- Document architectural patterns and decisions
-
-Focus on clean architecture principles, SOLID design principles, scalability, performance, security, and technology stack recommendations.
-
-Always consider the project's current state, constraints, and future growth needs.`,
-        tools: ['init_project', 'store_memory', 'search_memory'],
-        temperature: 0.8
+        naturalLanguageSpec: 'Help me design and plan software architectures, analyze existing systems, recommend architectural patterns, and make architectural decisions with focus on scalability, performance, and maintainability',
+        tools: ['codebase', 'search', 'search_unified_memory', 'store_unified_memory', 'init_project'],
+        model: 'claude-sonnet-4-20250514'
       },
       {
         name: 'debugger',
         description: 'Debug and troubleshoot code issues',
-        systemPrompt: `You are an expert debugging specialist focused on identifying and fixing code issues.
-
-Your expertise includes:
-- Analyzing error messages and stack traces
-- Identifying common bug patterns and root causes
-- Suggesting systematic debugging strategies
-- Performance issue identification
-
-Approach:
-1. Understand the problem context
-2. Analyze available error information
-3. Suggest systematic debugging steps
-4. Provide specific fix recommendations
-5. Help prevent similar issues in the future`,
-        tools: ['search_memory', 'store_memory'],
-        temperature: 0.6
+        naturalLanguageSpec: 'Help me debug code issues, analyze error messages and stack traces, identify root causes, suggest systematic debugging strategies, and provide specific fix recommendations',
+        tools: ['codebase', 'search', 'search_unified_memory', 'store_unified_memory'],
+        model: 'claude-sonnet-4-20250514'
       },
       {
         name: 'refactorer',
         description: 'Code refactoring and optimization specialist',
-        systemPrompt: `You are a code refactoring expert focused on improving code quality and maintainability.
-
-Your specializations:
-- Code smell identification and elimination
-- Refactoring pattern application
-- Performance optimization
-- Code organization and structure improvement
-- Technical debt reduction
-
-Refactoring principles:
-- Maintain existing functionality while improving code
-- Improve readability and reduce complexity
-- Eliminate duplication and follow established patterns
-- Enhance testability
-
-Always suggest incremental, safe refactoring steps with clear benefits explained.`,
-        tools: ['store_memory', 'search_memory'],
-        temperature: 0.7
+        naturalLanguageSpec: 'Help me refactor and optimize code by identifying code smells, suggesting improvements, reducing complexity, improving readability, and maintaining functionality while enhancing code quality',
+        tools: ['codebase', 'search', 'search_unified_memory', 'store_unified_memory'],
+        model: 'claude-sonnet-4-20250514'
       },
       {
         name: 'tester',
         description: 'Testing strategy and test creation specialist',
-        systemPrompt: `You are a testing expert specializing in test strategy, creation, and automation.
-
-Your focus areas:
-- Unit test creation and optimization
-- Integration testing strategies
-- Test-driven development (TDD) guidance
-- Testing framework recommendations
-- Test coverage analysis and mock/stub strategies
-
-Testing principles:
-- Write clear, maintainable tests with good coverage
-- Focus on edge cases and error conditions
-- Create meaningful test names and descriptions
-- Optimize test execution speed and maintain test independence
-
-Help create comprehensive test suites that catch bugs early and support refactoring.`,
-        tools: ['store_memory', 'search_memory'],
-        temperature: 0.7
+        naturalLanguageSpec: 'Help me create comprehensive testing strategies, design unit and integration tests, improve test coverage, select testing frameworks, and establish testing best practices',
+        tools: ['codebase', 'search', 'findTestFiles', 'search_unified_memory', 'store_unified_memory'],
+        model: 'claude-sonnet-4-20250514'
+      },
+      {
+        name: 'general',
+        description: 'Comprehensive coding assistance with full tool access',
+        naturalLanguageSpec: 'Provide comprehensive coding assistance across all technologies including code review, architecture guidance, testing strategy, documentation, project organization, and memory management with access to all available tools',
+        tools: ['codebase', 'search', 'fetch', 'findTestFiles', 'git', 'search_unified_memory', 'store_unified_memory', 'get_user_preferences', 'curate_context', 'memorize', 'init_project'],
+        model: 'claude-sonnet-4-20250514'
       }
     ];
 
@@ -178,45 +147,217 @@ Help create comprehensive test suites that catch bugs early and support refactor
   /**
    * Generate the .chatmode.md file content
    */
-  private generateChatModeContent(request: ChatModeRequest): string {
-    const tools = request.tools || ['store_memory', 'search_memory'];
-    const temperature = request.temperature || 0.7;
+  /**
+   * Generate detailed system prompt from natural language specification
+   */
+  private generateDetailedSystemPrompt(request: ChatModeRequest): string {
+    const spec = request.naturalLanguageSpec.toLowerCase();
 
-    return `---
-description: "${request.description}"
-tools: [${tools.map(tool => `"${tool}"`).join(', ')}]
-mcp: ["copilot-mcp"]
-temperature: ${temperature}
----
+    // Analyze the natural language spec to create comprehensive instructions
+    let prompt = `You are a specialized AI assistant for ${request.description.toLowerCase()}.
 
-# ${request.name.charAt(0).toUpperCase() + request.name.slice(1)} Mode
+## Your Role and Capabilities
 
-${request.systemPrompt}
+Based on the request: "${request.naturalLanguageSpec}"
 
-## Available MCP Tools
+You should:`;
 
-${tools.map(tool => `- **${tool}**: ${this.getToolDescription(tool)}`).join('\n')}
+    // Add specific capabilities based on keywords in the spec
+    if (spec.includes('debug') || spec.includes('troubleshoot') || spec.includes('error')) {
+      prompt += `
+- Analyze error messages and stack traces systematically
+- Identify root causes and common bug patterns
+- Suggest step-by-step debugging strategies
+- Recommend preventive measures for future issues`;
+    }
 
-## Usage
+    if (spec.includes('test') || spec.includes('testing')) {
+      prompt += `
+- Design comprehensive test strategies and approaches
+- Create unit, integration, and end-to-end tests
+- Review existing tests for coverage and quality
+- Suggest testing best practices and frameworks`;
+    }
 
-This mode is specialized for ${request.description.toLowerCase()}. GitHub Copilot will use this context and the available MCP tools to provide focused assistance in this domain.
+    if (spec.includes('architect') || spec.includes('design') || spec.includes('system')) {
+      prompt += `
+- Analyze and design system architectures
+- Recommend architectural patterns and best practices
+- Evaluate scalability and performance considerations
+- Document architectural decisions and trade-offs`;
+    }
 
----
-*Generated by Copilot MCP Toolset*
-`;
+    if (spec.includes('refactor') || spec.includes('optimize') || spec.includes('improve')) {
+      prompt += `
+- Identify code smells and improvement opportunities
+- Suggest refactoring strategies that maintain functionality
+- Optimize performance and reduce complexity
+- Improve code readability and maintainability`;
+    }
+
+    if (spec.includes('security') || spec.includes('secure')) {
+      prompt += `
+- Analyze code for security vulnerabilities
+- Recommend secure coding practices
+- Review authentication and authorization implementations
+- Suggest security best practices and compliance measures`;
+    }
+
+    // Add general guidelines
+    prompt += `
+
+## Working Approach
+
+1. **Understand Context**: Always review the current codebase and project structure
+2. **Search Memory**: Use available tools to search for relevant patterns and decisions
+3. **Apply Best Practices**: Follow established coding standards and architectural patterns
+4. **Document Decisions**: Store important insights and patterns for future reference
+5. **Validate Solutions**: Ensure recommendations are practical and maintainable
+
+## Communication Style
+
+- Provide clear, actionable recommendations
+- Explain the reasoning behind suggestions
+- Offer multiple approaches when appropriate
+- Focus on practical, implementable solutions
+
+Always prioritize code quality, maintainability, and alignment with the project's existing patterns and standards.`;
+
+    return prompt;
   }
 
   /**
-   * Simple tool descriptions
+   * Select appropriate tools for the mode based on its purpose
    */
-  private getToolDescription(toolName: string): string {
+  private selectToolsForMode(request: ChatModeRequest): string[] {
+    const spec = request.naturalLanguageSpec.toLowerCase();
+    const tools: Set<string> = new Set();
+
+    // Core tools always available
+    tools.add('codebase');
+    tools.add('search');
+
+    // Add memory tools for context
+    if (spec.includes('memory') || spec.includes('remember') || spec.includes('store')) {
+      tools.add('store_unified_memory');
+      tools.add('search_unified_memory');
+    }
+
+    // Add project tools for initialization and analysis
+    if (spec.includes('project') || spec.includes('init') || spec.includes('setup')) {
+      tools.add('init_project');
+    }
+
+    // Add user preference tools for personalization
+    if (spec.includes('preference') || spec.includes('style') || spec.includes('coding')) {
+      tools.add('get_user_preferences');
+      tools.add('curate_context');
+    }
+
+    // Add permanent instruction tools for learning
+    if (spec.includes('learn') || spec.includes('remember') || spec.includes('always')) {
+      tools.add('memorize');
+    }
+
+    // Add specific tools based on mode purpose
+    if (spec.includes('git') || spec.includes('version')) {
+      tools.add('git');
+    }
+
+    if (spec.includes('test') || spec.includes('testing')) {
+      tools.add('findTestFiles');
+    }
+
+    if (spec.includes('network') || spec.includes('api') || spec.includes('fetch')) {
+      tools.add('fetch');
+    }
+
+    // Always provide memory and search capabilities
+    tools.add('search_unified_memory');
+    tools.add('store_unified_memory');
+
+    return Array.from(tools);
+  }
+
+  /**
+   * Generate 100% GitHub Copilot compatible .chatmode.md content
+   */
+  private generateGitHubCopilotChatMode(params: {
+    name: string;
+    description: string;
+    systemPrompt: string;
+    tools: string[];
+    model?: string;
+  }): string {
+    // GitHub Copilot standard YAML frontmatter
+    let frontmatter = `---
+description: ${params.description}
+tools: [${params.tools.map(tool => `'${tool}'`).join(', ')}]`;
+
+    // Add model if specified (GitHub Copilot standard)
+    if (params.model) {
+      frontmatter += `\nmodel: ${params.model}`;
+    }
+
+    frontmatter += '\n---';
+
+    // GitHub Copilot standard markdown body
+    return `${frontmatter}
+
+# ${params.name.charAt(0).toUpperCase() + params.name.slice(1)} Mode
+
+${params.systemPrompt}
+
+## Available Tools
+
+${params.tools.map(tool => `- **${tool}**: ${this.getStandardToolDescription(tool)}`).join('\n')}
+
+## Usage in GitHub Copilot
+
+To activate this mode in GitHub Copilot Chat:
+\`\`\`
+@copilot /${params.name} [your request]
+\`\`\`
+
+This specialized mode will provide focused assistance for ${params.description.toLowerCase()}.`;
+  }
+
+  /**
+   * Standard tool descriptions for GitHub Copilot compatibility
+   */
+  private getStandardToolDescription(toolName: string): string {
     const descriptions: Record<string, string> = {
-      'init_project': 'Initialize project context and create GitHub Copilot instruction files',
-      'store_memory': 'Store information in persistent memory system for future reference',
-      'search_memory': 'Search and retrieve information from stored memory',
-      'get_memory_stats': 'Get current memory system usage statistics',
+      // GitHub Copilot built-in tools
+      'codebase': 'Search and analyze the codebase',
+      'search': 'Search files and content in the workspace',
+      'fetch': 'Fetch content from URLs and external resources',
+      'findTestFiles': 'Find and analyze test files in the project',
+      'git': 'Git version control operations',
+
+      // MCP memory tools (updated names)
+      'store_unified_memory': 'Store information in persistent memory system for future reference',
+      'search_unified_memory': 'Search and retrieve information from stored memory',
+      'get_unified_memory_stats': 'Get current memory system usage statistics',
+      'delete_memory': 'Delete memories with optional cascade handling',
+      'check_duplicate_memory': 'Check for duplicate memories using semantic similarity',
+      'migrate_memory_tier': 'Migrate memories between core and long-term tiers',
+      'get_memory_analytics': 'Get comprehensive memory analytics and usage patterns',
+
+      // User preference tools
+      'get_user_preferences': 'Load user coding preferences from global memory',
+      'extract_coding_preferences': 'Automatically detect and store coding preferences',
+      'curate_context': 'Assemble comprehensive context from preferences and project patterns',
+
+      // Permanent instruction tools
+      'memorize': 'Add permanent instructions to GitHub Copilot that are ALWAYS remembered',
+
+      // Project tools
+      'init_project': 'Initialize project with comprehensive analysis and documentation generation',
+
+      // Legacy tools (deprecated)
+      'store_memory': 'Legacy memory storage (use store_unified_memory instead)',
     };
 
-    return descriptions[toolName] || 'Specialized MCP tool for enhanced functionality';
+    return descriptions[toolName] || 'Specialized tool for enhanced functionality';
   }
 }
