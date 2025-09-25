@@ -1729,7 +1729,7 @@ ${basicAnalysis.dependencies.slice(0, 10).map(d => `- **${d.name}** (${d.version
    * Generate development tasks based on project analysis
    */
   private generateDevelopmentTasks(basicAnalysis: ProjectContext, comprehensiveAnalysis: any): string {
-    const tasks = [];
+    const tasks: string[] = [];
 
     if (basicAnalysis.type.includes('React') || basicAnalysis.type.includes('Node.js')) {
       tasks.push('- **Adding New Features**: Follow component patterns and service layer architecture');
@@ -1751,7 +1751,7 @@ ${basicAnalysis.dependencies.slice(0, 10).map(d => `- **${d.name}** (${d.version
    * Generate key constraints based on analysis
    */
   private generateKeyConstraints(basicAnalysis: ProjectContext, comprehensiveAnalysis: any): string {
-    const constraints = [];
+    const constraints: string[] = [];
 
     if (comprehensiveAnalysis.codeConventions.some((c: string) => c.includes('TypeScript'))) {
       constraints.push('- **Type Safety**: Maintain comprehensive TypeScript typing');

@@ -280,9 +280,9 @@ export class IntelligentMemoryAnalyzer {
       optimal_tier: tierRecommendation.tier,
       confidence: tierRecommendation.confidence,
       next_access_prediction: nextAccessPrediction,
-      archival_probability,
+      archival_probability: archivalProbability,
       optimization_suggestions: optimizationSuggestions,
-      learning_phase
+      learning_phase: learningPhase
     };
 
     // Cache results

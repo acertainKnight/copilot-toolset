@@ -7,8 +7,10 @@
  * - MCP specification 2025-06-18
  */
 
+import 'reflect-metadata';
 import { z } from 'zod';
 import type { MCPToolDefinition, ToolHandler } from './ToolRegistry.js';
+import type { ToolExecutionContext } from '../types/MCPCompliant.js';
 
 /**
  * Metadata storage for decorated tools
@@ -45,9 +47,9 @@ export function MCPTool(definition: Omit<MCPToolDefinition, 'inputSchema'> & {
     Reflect.defineMetadata(TOOL_METADATA_KEY, toolDefinition, target, propertyKey);
 
     // Wrap with automatic error handling and logging
-    descriptor.value = (async function(this: any, ...args: any[]) {
+    descriptor.value = (async function(this: any, args: any, context: ToolExecutionContext) {
       try {
-        return await originalMethod.apply(this, args);
+        return await originalMethod.call(this, args, context);
       } catch (error) {
         return {
           content: [{

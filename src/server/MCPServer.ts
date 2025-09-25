@@ -62,14 +62,8 @@ export class GitCopilotMemoryServer {
    * Setup MCP protocol handlers according to official specification
    */
   private setupMCPProtocol(): void {
-    // Register capability declarations (MCP requirement)
-    this.server.setCapabilities({
-      tools: {
-        listChanged: true // Support dynamic tool updates
-      },
-      resources: {},
-      prompts: {}
-    });
+    // The McpServer class handles capabilities internally
+    // We just need to register tools, resources, and prompts
 
     // Setup automatic tool registration
     this.setupAutomaticToolRegistration();
@@ -127,22 +121,9 @@ export class GitCopilotMemoryServer {
    * Provides enhanced tool discovery via stdio transport
    */
   private setupEnhancedToolsList(): void {
-    // Override the default tools/list handler to use our enhanced registry
-    this.server.listTools = async (params) => {
-      try {
-        const result = await this.toolRegistry.handleToolsList(params);
-
-        this.logger.debug(`tools/list called, returning ${result.tools.length} tools`);
-
-        return {
-          tools: result.tools,
-          nextCursor: result.nextCursor
-        };
-      } catch (error) {
-        this.logger.error('tools/list error:', error as Error);
-        throw error;
-      }
-    };
+    // The McpServer handles tools/list internally
+    // Tools are registered through the tool registry
+    // No need to override listTools
   }
 
   /**
@@ -150,69 +131,92 @@ export class GitCopilotMemoryServer {
    * Accessible via MCP protocol: mcp://tool-stats and mcp://tool-categories
    */
   private setupResourceProviders(): void {
-    this.server.setResourceHandler('tool-stats://', async (uri) => {
-      const stats = this.toolRegistry.getToolStats();
+    // Register resource for tool statistics
+    this.server.resource(
+      'tool-stats',
+      'tool-stats://',
+      {
+        description: 'Statistics about registered MCP tools',
+        mimeType: 'application/json'
+      },
+      async () => {
+        const stats = this.toolRegistry.getToolStats();
+        return {
+          contents: [{
+            uri: 'tool-stats://',
+            mimeType: 'application/json',
+            text: JSON.stringify(stats, null, 2)
+          }]
+        };
+      }
+    );
 
-      return {
-        contents: [{
-          uri,
-          mimeType: 'application/json',
-          text: JSON.stringify(stats, null, 2)
-        }]
-      };
-    });
-
-    this.server.setResourceHandler('tool-categories://', async (uri) => {
-      const stats = this.toolRegistry.getToolStats();
-
-      return {
-        contents: [{
-          uri,
-          mimeType: 'application/json',
-          text: JSON.stringify({
-            categories: Object.entries(stats.categories).map(([name, count]) => ({
-              name,
-              count,
-              description: this.getCategoryDescription(name)
-            }))
-          }, null, 2)
-        }]
-      };
-    });
+    // Register resource for tool categories
+    this.server.resource(
+      'tool-categories',
+      'tool-categories://',
+      {
+        description: 'List of tool categories with descriptions',
+        mimeType: 'application/json'
+      },
+      async () => {
+        const stats = this.toolRegistry.getToolStats();
+        return {
+          contents: [{
+            uri: 'tool-categories://',
+            mimeType: 'application/json',
+            text: JSON.stringify({
+              categories: Object.entries(stats.categories).map(([name, count]) => ({
+                name,
+                count,
+                description: this.getCategoryDescription(name)
+              }))
+            }, null, 2)
+          }]
+        };
+      }
+    );
   }
 
   /**
    * Setup MCP prompt providers for tool usage guidance
    */
   private setupPromptProviders(): void {
-    this.server.setPromptHandler('tool-usage', async (params) => {
-      const { toolName } = params.arguments || {};
-
-      if (toolName && typeof toolName === 'string') {
+    // Register a prompt for tool usage guidance
+    this.server.prompt(
+      'tool-usage',
+      'Get usage guidance for MCP tools',
+      {
+        toolName: z.string().optional().describe('Name of the tool to get guidance for')
+      },
+      async ({ toolName }) => {
         const stats = this.toolRegistry.getToolStats();
+
+        if (toolName && typeof toolName === 'string') {
+          return {
+            description: `Usage guidance for ${toolName}`,
+            messages: [{
+              role: 'user' as const,
+              content: {
+                type: 'text' as const,
+                text: `How should I use the ${toolName} tool effectively? Available categories: ${Object.keys(stats.categories).join(', ')}`
+              }
+            }]
+          };
+        }
+
         return {
-          description: `Usage guidance for ${toolName}`,
+          description: 'General tool usage guidance',
           messages: [{
-            role: 'user',
+            role: 'user' as const,
             content: {
-              type: 'text',
-              text: `How should I use the ${toolName} tool effectively? Available categories: ${Object.keys(stats.categories).join(', ')}`
+              type: 'text' as const,
+              text: 'Show me how to use the available MCP tools effectively for development tasks.'
             }
           }]
         };
       }
-
-      return {
-        description: 'General tool usage guidance',
-        messages: [{
-          role: 'user',
-          content: {
-            type: 'text',
-            text: 'Show me how to use the available MCP tools effectively for development tasks.'
-          }
-        }]
-      };
-    });
+    );
   }
 
   /**
@@ -304,4 +308,5 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   });
 }
 
-export { GitCopilotMemoryServer, main };
+export default GitCopilotMemoryServer;
+export { main };

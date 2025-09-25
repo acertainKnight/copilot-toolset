@@ -445,7 +445,21 @@ export class PerformanceAnalyzer {
   public updateBaselines(): void {
     const stableMetrics = this.getStableMetrics(); // Metrics without anomalies
 
-    for (const operationType of Object.values(OperationType)) {
+    // Define operation types as an array instead of using Object.values on the type
+    const operationTypes: OperationType[] = [
+      'memory_store',
+      'memory_search',
+      'tier_migration',
+      'behavioral_analysis',
+      'aging_calculation',
+      'optimization_generation',
+      'database_query',
+      'index_rebuild',
+      'cache_operation',
+      'cleanup_operation'
+    ];
+
+    for (const operationType of operationTypes) {
       const opMetrics = stableMetrics.filter(m => m.operation_type === operationType);
 
       if (opMetrics.length >= 100) { // Minimum sample size
@@ -648,21 +662,527 @@ export class PerformanceAnalyzer {
     ).length; // Operations in last 5 seconds
   }
 
-  // Additional placeholder methods...
+  // Additional methods implementation
   private storeMetricsInDatabase(metrics: PerformanceMetrics): void {
-    // Store metrics in database
+    try {
+      const stmt = this.database.prepare(`
+        INSERT INTO performance_metrics_log
+        (timestamp, operation_type, duration_ms, memory_usage_mb, cpu_usage_percent,
+         io_operations, cache_hits, cache_misses, concurrent_operations, error_count, warnings_count)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      stmt.run(
+        metrics.timestamp.getTime(),
+        metrics.operation_type,
+        metrics.duration_ms,
+        metrics.memory_usage_mb,
+        metrics.cpu_usage_percent,
+        metrics.io_operations,
+        metrics.cache_hits,
+        metrics.cache_misses,
+        metrics.concurrent_operations,
+        metrics.error_count,
+        metrics.warnings_count
+      );
+    } catch (error) {
+      console.error('Failed to store metrics in database:', error);
+    }
   }
 
   private checkImmediateAlerts(metrics: PerformanceMetrics): void {
     // Check for immediate alert conditions
+    if (metrics.duration_ms > (this.alertThresholds.get('latency_p95_ms') || 1000)) {
+      console.warn(`High latency detected: ${metrics.duration_ms}ms for ${metrics.operation_type}`);
+    }
+    if (metrics.error_count > 0) {
+      console.error(`Errors detected in operation ${metrics.operation_type}: ${metrics.error_count} errors`);
+    }
   }
 
   private getStableMetrics(): PerformanceMetrics[] {
-    // Return metrics without anomalies
-    return this.performanceHistory; // Simplified
+    // Return metrics without anomalies (simplified - excludes top 5% outliers)
+    const sorted = [...this.performanceHistory].sort((a, b) => a.duration_ms - b.duration_ms);
+    const cutoffIndex = Math.floor(sorted.length * 0.95);
+    return sorted.slice(0, cutoffIndex);
   }
 
-  // ... Additional helper method implementations would continue here
+  private calculateStatisticalSignificance(metrics: PerformanceMetrics, baseline: PerformanceBaseline): number {
+    // Simplified statistical significance calculation
+    const deviation = Math.abs(metrics.duration_ms - baseline.baseline_metrics.p95_latency_ms);
+    const stdDev = baseline.baseline_metrics.p95_latency_ms * 0.1; // Assume 10% std deviation
+    const zScore = deviation / stdDev;
+    // Convert z-score to confidence level (simplified)
+    return Math.min(1.0, Math.max(0, 1 - Math.exp(-zScore / 2)));
+  }
+
+  private identifyPotentialCauses(metrics: PerformanceMetrics, baseline: PerformanceBaseline): string[] {
+    const causes: string[] = [];
+
+    if (metrics.memory_usage_mb > baseline.baseline_metrics.avg_memory_usage_mb * 1.5) {
+      causes.push('Increased memory usage');
+    }
+    if (metrics.cpu_usage_percent > baseline.baseline_metrics.avg_cpu_usage_percent * 1.5) {
+      causes.push('Increased CPU usage');
+    }
+    if (metrics.cache_hits + metrics.cache_misses > 0) {
+      const hitRate = metrics.cache_hits / (metrics.cache_hits + metrics.cache_misses);
+      if (hitRate < baseline.baseline_metrics.avg_cache_hit_rate * 0.8) {
+        causes.push('Degraded cache performance');
+      }
+    }
+    if (metrics.concurrent_operations > 10) {
+      causes.push('High concurrency');
+    }
+    if (metrics.error_count > 0) {
+      causes.push('Error conditions');
+    }
+
+    if (causes.length === 0) {
+      causes.push('Unknown - requires deeper analysis');
+    }
+
+    return causes;
+  }
+
+  private isUserFacingOperation(operationType: OperationType): boolean {
+    // Determine if operation is user-facing
+    const userFacingOps: OperationType[] = ['memory_search', 'memory_store', 'tier_migration'];
+    return userFacingOps.includes(operationType);
+  }
+
+  private estimateRecoveryTime(regressionPercent: number): string {
+    if (regressionPercent < 0.5) return 'minutes';
+    if (regressionPercent < 1.0) return 'hours';
+    return 'days';
+  }
+
+  private storeRegressionInDatabase(regression: PerformanceRegression): void {
+    try {
+      // Create table if it doesn't exist
+      this.database.exec(`
+        CREATE TABLE IF NOT EXISTS performance_regressions (
+          regression_id TEXT PRIMARY KEY,
+          detected_at INTEGER NOT NULL,
+          operation_type TEXT NOT NULL,
+          metric_affected TEXT NOT NULL,
+          baseline_value REAL,
+          current_value REAL,
+          regression_percent REAL,
+          statistical_significance REAL,
+          potential_causes TEXT,
+          user_facing INTEGER,
+          severity REAL,
+          estimated_recovery_time TEXT,
+          rollback_recommendation INTEGER
+        )
+      `);
+
+      const stmt = this.database.prepare(`
+        INSERT INTO performance_regressions
+        (regression_id, detected_at, operation_type, metric_affected, baseline_value,
+         current_value, regression_percent, statistical_significance, potential_causes,
+         user_facing, severity, estimated_recovery_time, rollback_recommendation)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      stmt.run(
+        regression.regression_id,
+        regression.detected_at.getTime(),
+        regression.operation_type,
+        regression.metric_affected,
+        regression.baseline_value,
+        regression.current_value,
+        regression.regression_percent,
+        regression.statistical_significance,
+        JSON.stringify(regression.potential_causes),
+        regression.impact_assessment.user_facing ? 1 : 0,
+        regression.impact_assessment.severity,
+        regression.impact_assessment.estimated_recovery_time,
+        regression.rollback_recommendation ? 1 : 0
+      );
+    } catch (error) {
+      console.error('Failed to store regression in database:', error);
+    }
+  }
+
+  private getMetricsForPeriod(start: Date, end: Date): PerformanceMetrics[] {
+    try {
+      const rows = this.database.prepare(`
+        SELECT * FROM performance_metrics_log
+        WHERE timestamp >= ? AND timestamp <= ?
+        ORDER BY timestamp DESC
+      `).all(start.getTime(), end.getTime()) as any[];
+
+      return rows.map(row => ({
+        timestamp: new Date(row.timestamp),
+        operation_type: row.operation_type as OperationType,
+        duration_ms: row.duration_ms,
+        memory_usage_mb: row.memory_usage_mb,
+        cpu_usage_percent: row.cpu_usage_percent,
+        io_operations: row.io_operations,
+        cache_hits: row.cache_hits,
+        cache_misses: row.cache_misses,
+        concurrent_operations: row.concurrent_operations,
+        error_count: row.error_count,
+        warnings_count: row.warnings_count
+      }));
+    } catch (error) {
+      console.error('Failed to get metrics for period:', error);
+      return [];
+    }
+  }
+
+  private groupMetricsByOperation(metrics: PerformanceMetrics[]): Map<OperationType, PerformanceMetrics[]> {
+    const grouped = new Map<OperationType, PerformanceMetrics[]>();
+
+    for (const metric of metrics) {
+      const existing = grouped.get(metric.operation_type) || [];
+      existing.push(metric);
+      grouped.set(metric.operation_type, existing);
+    }
+
+    return grouped;
+  }
+
+  private calculateErrorRate(metrics: PerformanceMetrics[]): number {
+    if (metrics.length === 0) return 0;
+
+    const totalErrors = metrics.reduce((sum, m) => sum + m.error_count, 0);
+    return (totalErrors / metrics.length) * 100;
+  }
+
+  private async getRegressionsCount(start: Date, end: Date): Promise<number> {
+    try {
+      const result = this.database.prepare(`
+        SELECT COUNT(*) as count FROM performance_regressions
+        WHERE detected_at >= ? AND detected_at <= ?
+      `).get(start.getTime(), end.getTime()) as { count: number };
+
+      return result.count || 0;
+    } catch (error) {
+      console.error('Failed to get regressions count:', error);
+      return 0;
+    }
+  }
+
+  private calculatePerformanceScore(metrics: PerformanceMetrics[]): number {
+    if (metrics.length === 0) return 100;
+
+    let score = 100;
+
+    // Deduct points for high latency
+    const avgLatency = this.calculateAverage(metrics, 'duration_ms');
+    if (avgLatency > 100) score -= Math.min(20, (avgLatency - 100) / 10);
+    if (avgLatency > 500) score -= 20;
+
+    // Deduct points for errors
+    const errorRate = this.calculateErrorRate(metrics);
+    score -= Math.min(30, errorRate * 3);
+
+    // Deduct points for low cache hit rate
+    const cacheMetrics = metrics.filter(m => m.cache_hits + m.cache_misses > 0);
+    if (cacheMetrics.length > 0) {
+      const avgHitRate = cacheMetrics.reduce((sum, m) =>
+        sum + (m.cache_hits / (m.cache_hits + m.cache_misses)), 0) / cacheMetrics.length;
+      if (avgHitRate < 0.8) score -= (0.8 - avgHitRate) * 20;
+    }
+
+    // Deduct points for high resource usage
+    const avgCpu = this.calculateAverage(metrics, 'cpu_usage_percent');
+    if (avgCpu > 70) score -= Math.min(10, (avgCpu - 70) / 3);
+
+    return Math.max(0, score);
+  }
+
+  private async getRegressionsForPeriod(start: Date, end: Date): Promise<PerformanceRegression[]> {
+    try {
+      const rows = this.database.prepare(`
+        SELECT * FROM performance_regressions
+        WHERE detected_at >= ? AND detected_at <= ?
+        ORDER BY detected_at DESC
+      `).all(start.getTime(), end.getTime()) as any[];
+
+      return rows.map(row => ({
+        regression_id: row.regression_id,
+        detected_at: new Date(row.detected_at),
+        operation_type: row.operation_type as OperationType,
+        metric_affected: row.metric_affected,
+        baseline_value: row.baseline_value,
+        current_value: row.current_value,
+        regression_percent: row.regression_percent,
+        statistical_significance: row.statistical_significance,
+        potential_causes: JSON.parse(row.potential_causes),
+        impact_assessment: {
+          user_facing: row.user_facing === 1,
+          severity: row.severity,
+          estimated_recovery_time: row.estimated_recovery_time
+        },
+        rollback_recommendation: row.rollback_recommendation === 1
+      }));
+    } catch (error) {
+      console.error('Failed to get regressions for period:', error);
+      return [];
+    }
+  }
+
+  private async getResourceUtilizationTrends(start: Date, end: Date): Promise<ResourceUtilization[]> {
+    try {
+      // For now, return current resource utilization as a single data point
+      // In production, this would query historical resource data
+      const current: ResourceUtilization = {
+        timestamp: new Date(),
+        system_metrics: {
+          cpu_usage_percent: await this.getCpuUsage(),
+          memory_usage_percent: this.getMemoryUsage(),
+          memory_available_mb: os.freemem() / (1024 * 1024),
+          disk_io_rate_mb_sec: 0,
+          disk_usage_percent: 0,
+          network_io_kb_sec: 0
+        },
+        memory_system_metrics: {
+          core_tier_utilization: await this.getCoreMemoryUtilization(),
+          longterm_tier_size_gb: await this.getLongtermStorageSize(),
+          active_connections: 1,
+          cache_size_mb: 0,
+          cache_hit_rate: 0.8,
+          index_cache_usage_mb: 0,
+          query_queue_length: 0,
+          concurrent_operations: this.getCurrentConcurrentOperations()
+        },
+        performance_indicators: {
+          avg_search_latency_ms: this.getRecentAverageLatency('memory_search'),
+          avg_store_latency_ms: this.getRecentAverageLatency('memory_store'),
+          error_rate_percent: this.calculateRecentErrorRate(),
+          operation_throughput_per_sec: this.calculateRecentThroughput()
+        }
+      };
+
+      return [current];
+    } catch (error) {
+      console.error('Failed to get resource utilization trends:', error);
+      return [];
+    }
+  }
+
+  private generatePerformanceRecommendations(
+    metrics: PerformanceMetrics[],
+    bottlenecks: BottleneckDetection[],
+    regressions: PerformanceRegression[]
+  ): Array<{
+    category: string;
+    recommendation: string;
+    priority: 'low' | 'medium' | 'high';
+    estimated_impact: number;
+    implementation_complexity: 'easy' | 'medium' | 'hard';
+  }> {
+    const recommendations: Array<{
+      category: string;
+      recommendation: string;
+      priority: 'low' | 'medium' | 'high';
+      estimated_impact: number;
+      implementation_complexity: 'easy' | 'medium' | 'hard';
+    }> = [];
+
+    // Analyze bottlenecks for recommendations
+    for (const bottleneck of bottlenecks) {
+      if (bottleneck.severity === 'critical' || bottleneck.severity === 'high') {
+        recommendations.push({
+          category: 'Performance',
+          recommendation: bottleneck.suggested_mitigations[0] || 'Address bottleneck',
+          priority: bottleneck.severity === 'critical' ? 'high' as const : 'medium' as const,
+          estimated_impact: bottleneck.performance_impact.user_experience_impact,
+          implementation_complexity: 'medium' as const
+        });
+      }
+    }
+
+    // Analyze regressions for recommendations
+    for (const regression of regressions) {
+      if (regression.rollback_recommendation) {
+        recommendations.push({
+          category: 'Regression',
+          recommendation: `Consider rolling back changes that affected ${regression.metric_affected}`,
+          priority: 'high' as const,
+          estimated_impact: regression.impact_assessment.severity,
+          implementation_complexity: 'easy' as const
+        });
+      }
+    }
+
+    // General performance recommendations based on metrics
+    const avgLatency = this.calculateAverage(metrics, 'duration_ms');
+    if (avgLatency > 500) {
+      recommendations.push({
+        category: 'Latency',
+        recommendation: 'Optimize slow operations or implement caching',
+        priority: 'high' as const,
+        estimated_impact: 0.7,
+        implementation_complexity: 'medium' as const
+      });
+    }
+
+    const errorRate = this.calculateErrorRate(metrics);
+    if (errorRate > 5) {
+      recommendations.push({
+        category: 'Reliability',
+        recommendation: 'Investigate and fix error conditions',
+        priority: 'high' as const,
+        estimated_impact: 0.8,
+        implementation_complexity: 'medium' as const
+      });
+    }
+
+    return recommendations;
+  }
+
+  private async storePerformanceReport(report: PerformanceReport): Promise<void> {
+    try {
+      // Create table if it doesn't exist
+      this.database.exec(`
+        CREATE TABLE IF NOT EXISTS performance_reports (
+          report_id TEXT PRIMARY KEY,
+          generated_at INTEGER NOT NULL,
+          time_period_start INTEGER,
+          time_period_end INTEGER,
+          summary TEXT,
+          recommendations TEXT,
+          performance_score REAL
+        )
+      `);
+
+      const stmt = this.database.prepare(`
+        INSERT INTO performance_reports
+        (report_id, generated_at, time_period_start, time_period_end, summary, recommendations, performance_score)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      stmt.run(
+        report.report_id,
+        report.generated_at.getTime(),
+        report.time_period.start.getTime(),
+        report.time_period.end.getTime(),
+        JSON.stringify(report.summary),
+        JSON.stringify(report.recommendations),
+        report.summary.performance_score
+      );
+    } catch (error) {
+      console.error('Failed to store performance report:', error);
+    }
+  }
+
+  private storeBaselineInDatabase(baseline: PerformanceBaseline): void {
+    try {
+      // Create table if it doesn't exist
+      this.database.exec(`
+        CREATE TABLE IF NOT EXISTS performance_baselines (
+          operation_type TEXT PRIMARY KEY,
+          p50_latency_ms REAL,
+          p95_latency_ms REAL,
+          p99_latency_ms REAL,
+          avg_throughput_ops_sec REAL,
+          avg_memory_usage_mb REAL,
+          avg_cpu_usage_percent REAL,
+          avg_cache_hit_rate REAL,
+          last_updated INTEGER,
+          sample_size INTEGER,
+          confidence_interval REAL
+        )
+      `);
+
+      const stmt = this.database.prepare(`
+        INSERT OR REPLACE INTO performance_baselines
+        (operation_type, p50_latency_ms, p95_latency_ms, p99_latency_ms,
+         avg_throughput_ops_sec, avg_memory_usage_mb, avg_cpu_usage_percent,
+         avg_cache_hit_rate, last_updated, sample_size, confidence_interval)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      stmt.run(
+        baseline.operation_type,
+        baseline.baseline_metrics.p50_latency_ms,
+        baseline.baseline_metrics.p95_latency_ms,
+        baseline.baseline_metrics.p99_latency_ms,
+        baseline.baseline_metrics.avg_throughput_ops_sec,
+        baseline.baseline_metrics.avg_memory_usage_mb,
+        baseline.baseline_metrics.avg_cpu_usage_percent,
+        baseline.baseline_metrics.avg_cache_hit_rate,
+        baseline.last_updated.getTime(),
+        baseline.sample_size,
+        baseline.confidence_interval
+      );
+    } catch (error) {
+      console.error('Failed to store baseline in database:', error);
+    }
+  }
+
+  private getRecentAverageLatency(operationType: OperationType): number {
+    const recentMetrics = this.getRecentMetrics(5); // Last 5 minutes
+    const opMetrics = recentMetrics.filter(m => m.operation_type === operationType);
+
+    if (opMetrics.length === 0) return 0;
+
+    return opMetrics.reduce((sum, m) => sum + m.duration_ms, 0) / opMetrics.length;
+  }
+
+  private calculateRecentErrorRate(): number {
+    const recentMetrics = this.getRecentMetrics(15); // Last 15 minutes
+    return this.calculateErrorRate(recentMetrics);
+  }
+
+  private calculateRecentThroughput(): number {
+    const recentMetrics = this.getRecentMetrics(60); // Last hour
+    if (recentMetrics.length === 0) return 0;
+
+    const timeSpanSeconds = (Date.now() - recentMetrics[0].timestamp.getTime()) / 1000;
+    return recentMetrics.length / timeSpanSeconds;
+  }
+
+  private async storeResourceMetrics(metrics: ResourceUtilization): Promise<void> {
+    try {
+      // Create table if it doesn't exist
+      this.database.exec(`
+        CREATE TABLE IF NOT EXISTS resource_utilization (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          timestamp INTEGER NOT NULL,
+          cpu_usage_percent REAL,
+          memory_usage_percent REAL,
+          memory_available_mb REAL,
+          disk_io_rate_mb_sec REAL,
+          core_tier_utilization REAL,
+          longterm_tier_size_gb REAL,
+          avg_search_latency_ms REAL,
+          avg_store_latency_ms REAL,
+          error_rate_percent REAL,
+          operation_throughput_per_sec REAL
+        )
+      `);
+
+      const stmt = this.database.prepare(`
+        INSERT INTO resource_utilization
+        (timestamp, cpu_usage_percent, memory_usage_percent, memory_available_mb,
+         disk_io_rate_mb_sec, core_tier_utilization, longterm_tier_size_gb,
+         avg_search_latency_ms, avg_store_latency_ms, error_rate_percent,
+         operation_throughput_per_sec)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      stmt.run(
+        metrics.timestamp.getTime(),
+        metrics.system_metrics.cpu_usage_percent,
+        metrics.system_metrics.memory_usage_percent,
+        metrics.system_metrics.memory_available_mb,
+        metrics.system_metrics.disk_io_rate_mb_sec,
+        metrics.memory_system_metrics.core_tier_utilization,
+        metrics.memory_system_metrics.longterm_tier_size_gb,
+        metrics.performance_indicators.avg_search_latency_ms,
+        metrics.performance_indicators.avg_store_latency_ms,
+        metrics.performance_indicators.error_rate_percent,
+        metrics.performance_indicators.operation_throughput_per_sec
+      );
+    } catch (error) {
+      console.error('Failed to store resource metrics:', error);
+    }
+  }
 }
 
 /**

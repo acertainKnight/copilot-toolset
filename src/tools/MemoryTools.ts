@@ -58,7 +58,7 @@ export class MemoryTools {
     project_id?: string;
     tags?: string[];
     metadata?: Record<string, any>;
-  }) {
+  }, context: ToolExecutionContext) {
     try {
       const memoryId = await this.unifiedMemoryManager.store(
         content,
@@ -124,7 +124,7 @@ The memory is now available for search and retrieval across the system.`
     scope?: 'global' | 'project' | 'both';
     limit?: number;
     project_id?: string;
-  }) {
+  }, context: ToolExecutionContext) {
     try {
       const results = await this.unifiedMemoryManager.search(
         query,
@@ -374,7 +374,7 @@ Please check the memory ID and try again.`
     scope?: MemoryScope;
     similarity_threshold?: number;
     project_id?: string;
-  }) {
+  }, context: ToolExecutionContext) {
     try {
       const result = await this.unifiedMemoryManager.checkDuplicateMemory(
         content,
@@ -914,7 +914,7 @@ ${context_description ? `📝 **Context:** ${context_description}` : ''}
     include_preferences?: boolean;
     include_project_patterns?: boolean;
     context_depth?: 'minimal' | 'standard' | 'comprehensive';
-  }) {
+  }, context: ToolExecutionContext) {
     try {
       const contextSections: string[] = [];
       const currentProject = context.workspacePath || 'default';
@@ -1006,7 +1006,7 @@ ${projectList}`);
       }
 
       // Generate comprehensive guidance
-      const guidanceSection = this.generateContextGuidance(task_description, totalMemories, context_depth);
+      const guidanceSection = this.generateContextGuidance(task_description, totalMemories, context_depth || 'standard');
 
       return {
         content: [{

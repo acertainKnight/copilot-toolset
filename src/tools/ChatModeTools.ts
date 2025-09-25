@@ -8,16 +8,25 @@
 import { z } from 'zod';
 import { MCPTool, TOOL_CATEGORIES, TOOL_PERMISSIONS } from '../server/MCPToolDecorator.js';
 import { ChatModeManager } from '../modes/ChatModeManager.js';
-import type { ToolExecutionContext } from '../types/index.js';
+import type { ToolExecutionContext } from '../types/MCPCompliant.js';
+import type { Logger } from '../types/index.js';
 
 /**
  * Chat Mode Tools for GitHub Copilot integration
  */
 export class ChatModeTools {
   private chatModeManager: ChatModeManager;
+  private logger: Logger;
 
   constructor() {
-    this.chatModeManager = new ChatModeManager();
+    // Initialize logger
+    this.logger = {
+      debug: (msg: string) => console.error(`[DEBUG] ${msg}`),
+      info: (msg: string) => console.error(`[INFO] ${msg}`),
+      warn: (msg: string) => console.error(`[WARN] ${msg}`),
+      error: (msg: string, error?: Error) => console.error(`[ERROR] ${msg}`, error)
+    };
+    this.chatModeManager = new ChatModeManager(this.logger);
   }
 
   /**
@@ -66,7 +75,7 @@ export class ChatModeTools {
 
       // Check if mode already exists
       const existingModes = await this.chatModeManager.listModes();
-      if (existingModes.some(mode => mode.name === name)) {
+      if (existingModes.includes(name)) {
         return {
           content: [{
             type: 'text' as const,
@@ -80,11 +89,8 @@ export class ChatModeTools {
       const result = await this.chatModeManager.createMode({
         name,
         description,
-        systemPrompt: system_prompt,
-        tools: tools || [],
-        temperature: temperature || 0.7,
-        generateDualFormat: true,
-        githubCopilotCompatible: true
+        naturalLanguageSpec: system_prompt,
+        tools: tools || []
       });
 
       return {
@@ -152,12 +158,9 @@ The .chatmode.md file has been created in your .github/chatmodes/ directory and 
     format?: 'summary' | 'detailed';
   }, context: ToolExecutionContext) {
     try {
-      const modes = await this.chatModeManager.listModes({
-        includeBuiltin: include_builtin !== false,
-        includeMetadata: format === 'detailed'
-      });
+      const modeNames = await this.chatModeManager.listModes();
 
-      if (modes.length === 0) {
+      if (modeNames.length === 0) {
         return {
           content: [{
             type: 'text' as const,
@@ -166,23 +169,23 @@ The .chatmode.md file has been created in your .github/chatmodes/ directory and 
         };
       }
 
-      const formatMode = (mode: any) => {
+      // Built-in modes are known
+      const builtinModeNames = ['general', 'architect', 'debugger', 'refactorer', 'tester'];
+      const customModeNames = modeNames.filter(name => !builtinModeNames.includes(name));
+
+      const formatMode = (modeName: string) => {
+        const isBuiltin = builtinModeNames.includes(modeName);
         if (format === 'detailed') {
-          return `**${mode.name}** ${mode.isBuiltin ? '(Built-in)' : '(Custom)'}
-Description: ${mode.description}
-System Prompt: ${mode.systemPrompt.substring(0, 150)}${mode.systemPrompt.length > 150 ? '...' : ''}
-Tools: ${mode.tools.join(', ') || 'Default'}
-Temperature: ${mode.temperature}
-GitHub Copilot: ${mode.githubCopilotCompatible ? '✅ Compatible' : '❌ Not compatible'}`;
+          return `**${modeName}** ${isBuiltin ? '(Built-in)' : '(Custom)'}`;
         } else {
-          return `• **${mode.name}** ${mode.isBuiltin ? '(Built-in)' : '(Custom)'} - ${mode.description}`;
+          return `• **${modeName}** ${isBuiltin ? '(Built-in)' : '(Custom)'}`;
         }
       };
 
-      const builtinModes = modes.filter(mode => mode.isBuiltin);
-      const customModes = modes.filter(mode => !mode.isBuiltin);
+      const builtinModes = modeNames.filter(name => builtinModeNames.includes(name));
+      const customModes = customModeNames;
 
-      let output = `🎯 **Available Chat Modes (${modes.length} total)**\n\n`;
+      let output = `🎯 **Available Chat Modes (${modeNames.length} total)**\n\n`;
 
       if (builtinModes.length > 0 && include_builtin !== false) {
         output += `**Built-in Modes (${builtinModes.length}):**\n`;
@@ -199,7 +202,7 @@ GitHub Copilot: ${mode.githubCopilotCompatible ? '✅ Compatible' : '❌ Not com
       output += `**Usage in GitHub Copilot Chat:**\n`;
       output += `Type "@<mode_name>" to activate any mode in GitHub Copilot Chat.\n\n`;
       output += `**Available Modes for Activation:**\n`;
-      output += modes.map(mode => `- @${mode.name}`).join('\n');
+      output += modeNames.map(modeName => `- @${modeName}`).join('\n');
 
       return {
         content: [{
@@ -220,7 +223,9 @@ GitHub Copilot: ${mode.githubCopilotCompatible ? '✅ Compatible' : '❌ Not com
 
   /**
    * Update existing chat mode
+   * TODO: Implement updateMode in ChatModeManager
    */
+  /* Commented out - updateMode not implemented
   @MCPTool({
     name: 'update_chat_mode',
     title: 'Update Chat Mode',
@@ -259,7 +264,7 @@ GitHub Copilot: ${mode.githubCopilotCompatible ? '✅ Compatible' : '❌ Not com
         regenerateGithubFormat: true
       });
 
-      const updatedFields = [];
+      const updatedFields: string[] = [];
       if (description) updatedFields.push('Description');
       if (system_prompt) updatedFields.push('System Prompt');
       if (tools) updatedFields.push('Tools');
@@ -296,10 +301,13 @@ ${description ? `- Description: ${description}\n` : ''}${system_prompt ? `- Syst
       };
     }
   }
+  */
 
   /**
    * Delete custom chat mode
+   * TODO: Implement deleteMode in ChatModeManager
    */
+  /* Commented out - deleteMode not implemented
   @MCPTool({
     name: 'delete_chat_mode',
     title: 'Delete Chat Mode',
@@ -365,10 +373,13 @@ The "@${name}" command will no longer work in GitHub Copilot Chat.`
       };
     }
   }
+  */
 
   /**
    * Validate chat mode GitHub Copilot compatibility
+   * TODO: Implement validateMode in ChatModeManager
    */
+  /* Commented out - validateMode not implemented
   @MCPTool({
     name: 'validate_chat_mode_compatibility',
     title: 'Validate Chat Mode Compatibility',
@@ -426,4 +437,5 @@ ${validation.isValid ? '- Mode is ready for GitHub Copilot integration\n- No cha
       };
     }
   }
+  */
 }

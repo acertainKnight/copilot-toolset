@@ -9,7 +9,8 @@
 
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { Logger } from '../utils/Logger.js';
+import type { Logger } from '../types/index.js';
+import type { ToolExecutionContext } from '../types/MCPCompliant.js';
 
 /**
  * MCP Tool Definition - follows official MCP specification
@@ -35,17 +36,8 @@ export interface MCPToolDefinition {
   requiresConfirmation?: boolean;
 }
 
-/**
- * Tool execution context with security controls
- */
-export interface ToolExecutionContext {
-  /** Current workspace path */
-  workspacePath?: string;
-  /** User authentication info */
-  user?: { id: string; permissions: string[] };
-  /** Request rate limiting */
-  rateLimiter?: Map<string, number>;
-}
+// Re-export ToolExecutionContext for convenience
+export type { ToolExecutionContext } from '../types/MCPCompliant.js';
 
 /**
  * Tool handler function signature (MCP specification compliant)
@@ -125,7 +117,7 @@ export class MCPToolRegistry {
       this.logger.info(`Registered MCP tool: ${definition.name}`);
 
     } catch (error) {
-      this.logger.error(`Failed to register tool ${definition.name}:`, error);
+      this.logger.error(`Failed to register tool ${definition.name}:`, error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
   }
@@ -234,7 +226,8 @@ export class MCPToolRegistry {
       // Execute tool with context
       const context: ToolExecutionContext = {
         workspacePath: process.cwd(),
-        rateLimiter: this.rateLimiters.get(toolName)
+        rateLimiter: this.rateLimiters.get(toolName),
+        timestamp: new Date()
       };
 
       const result = await tool.handler(validatedArgs, context);
@@ -247,7 +240,7 @@ export class MCPToolRegistry {
       return result;
 
     } catch (error) {
-      this.logger.error(`Tool execution error for ${toolName}:`, error);
+      this.logger.error(`Tool execution error for ${toolName}:`, error instanceof Error ? error : new Error(String(error)));
       return {
         content: [{
           type: 'text',
