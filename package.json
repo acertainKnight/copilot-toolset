@@ -60,7 +60,7 @@
     "level": "^8.0.1",
     "markdown-it": "^14.0.0",
     "reflect-metadata": "^0.2.2",
-    "simple-git": "^3.33.0",
+    "simple-git": "^3.36.0",
     "yaml": "^2.8.3",
     "zod": "^3.23.8"
   },
