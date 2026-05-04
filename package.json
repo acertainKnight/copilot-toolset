@@ -61,7 +61,7 @@
     "markdown-it": "^14.0.0",
     "reflect-metadata": "^0.2.2",
     "simple-git": "^3.36.0",
-    "yaml": "^2.8.3",
+    "yaml": "^2.8.4",
     "zod": "^3.23.8"
   },
   "devDependencies": {
