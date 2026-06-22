@@ -55,7 +55,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "better-sqlite3": "^9.6.0",
-    "commander": "^11.1.0",
+    "commander": "^15.0.0",
     "glob": "^10.3.10",
     "level": "^8.0.1",
     "markdown-it": "^14.0.0",
