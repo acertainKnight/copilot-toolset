@@ -58,7 +58,7 @@
     "commander": "^11.1.0",
     "glob": "^10.3.10",
     "level": "^8.0.1",
-    "markdown-it": "^14.0.0",
+    "markdown-it": "^15.0.0",
     "reflect-metadata": "^0.2.2",
     "simple-git": "^3.36.0",
     "yaml": "^2.9.0",
