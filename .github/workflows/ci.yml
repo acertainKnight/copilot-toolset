@@ -161,13 +161,13 @@ jobs:
 
       - name: Run CodeQL Analysis
         if: github.event_name == 'push'
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: typescript
 
       - name: Perform CodeQL Analysis
         if: github.event_name == 'push'
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
 
   # Build and package
   build:
